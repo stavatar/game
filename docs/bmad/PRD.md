@@ -296,11 +296,36 @@ Emergent-система, где:
 
 ---
 
-## 9. История Изменений (Change History)
+## 9. Исследовательские Материалы (Research References)
+
+Подробная информация о теоретических основах проекта доступна в исследовательских документах:
+
+| Документ | Описание | Ключевые темы |
+|----------|----------|---------------|
+| [Agent Simulations](research/agent-simulations.md) | Лучшие практики создания агентных симуляций | BDI, Generative Agents, Utility AI, Emergent Narrative |
+| [Marxism Guide](research/marxism-guide.md) | Марксистская теория для моделирования | Базис/Надстройка, Классы, Прибавочная стоимость, Идеология |
+
+### Ключевые Источники
+
+**Агентные симуляции:**
+- Generative Agents (Stanford, 2023) — Memory Stream, Reflection
+- BDI Architecture (Bratman) — Beliefs, Desires, Intentions
+- Dwarf Fortress — Emergent Narrative
+- The Sims — Utility AI, Needs System
+
+**Марксистская теория:**
+- Marx, K. "Das Kapital" — Прибавочная стоимость, Эксплуатация
+- Marx & Engels "The German Ideology" — Исторический материализм
+- Gramsci "Prison Notebooks" — Гегемония, Ложное сознание
+
+---
+
+## 10. История Изменений (Change History)
 
 | Версия | Дата | Автор | Описание |
 |--------|------|-------|----------|
 | 1.0 | 2026-01-31 | PM Agent | Первоначальная версия PRD |
+| 1.1 | 2026-01-31 | PM Agent | Добавлены ссылки на исследования |
 
 ---
 

@@ -1196,11 +1196,56 @@ python3 main.py
 
 ---
 
-## 9. История Изменений (Change History)
+## 9. Исследовательские Материалы (Research References)
+
+Архитектурные решения в этом проекте основаны на исследованиях лучших практик в области агентных симуляций и марксистской теории.
+
+### 9.1 Связь с Исследованиями
+
+| Компонент | Исследование | Применённые Паттерны |
+|-----------|-------------|---------------------|
+| NPC AI (src/npc/, src/ai/) | [Agent Simulations](research/agent-simulations.md) | BDI Architecture, Memory Stream, Reflection |
+| Behavior System | [Agent Simulations](research/agent-simulations.md) | Utility AI (The Sims), Needs-based decisions |
+| Class System (src/society/) | [Marxism Guide](research/marxism-guide.md) | Emergent Classes, Property Relations |
+| Culture System (src/culture/) | [Marxism Guide](research/marxism-guide.md) | Base→Superstructure, Ideology Formation |
+| Economy (src/economy/) | [Marxism Guide](research/marxism-guide.md) | Surplus Value, Modes of Production |
+| Simulation Loop | [Agent Simulations](research/agent-simulations.md) | Emergent Narrative (Dwarf Fortress) |
+
+### 9.2 Ключевые Архитектурные Влияния
+
+**От Generative Agents (Stanford):**
+- Memory Stream архитектура в `src/npc/memory.py`
+- Reflection механизм для формирования выводов
+- Planning на основе памяти и целей
+
+**От BDI Architecture:**
+- Beliefs-Desires-Intentions цикл в `src/ai/bdi.py`
+- Perception → Deliberation → Planning → Execution
+
+**От Utility AI (The Sims):**
+- Needs-based decision making
+- Utility scores для выбора действий
+
+**От Marxist Theory:**
+- Порядок обновления: Economy → Society → Culture
+- Emergent classes из property relations
+- Superstructure зависит от Base
+
+### 9.3 Рекомендации для Разработчиков
+
+Перед началом работы рекомендуется ознакомиться с:
+
+1. **[Agent Simulations Guide](research/agent-simulations.md)** — для понимания AI архитектуры NPC
+2. **[Marxism Guide](research/marxism-guide.md)** — для понимания модели общества
+
+---
+
+## 10. История Изменений (Change History)
 
 | Версия | Дата | Автор | Описание |
 |--------|------|-------|----------|
 | 1.0 | 2026-01-31 | Architect Agent | Первоначальная версия |
+| 1.1 | 2026-01-31 | Architect Agent | Добавлены ссылки на исследования |
 
 ---
 

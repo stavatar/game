@@ -26,6 +26,9 @@ docs/bmad/
 ├── epics-and-stories.md        # Эпики и пользовательские истории
 ├── tech-specs/
 │   └── data-models.md          # Модели данных
+├── research/                   # Исследования для разработки
+│   ├── agent-simulations.md    # Агентные симуляции и Game AI
+│   └── marxism-guide.md        # Марксизм: теория и примеры
 └── stories/                    # Отдельные story файлы (для SM)
 ```
 
@@ -52,6 +55,13 @@ docs/bmad/
 | Document | Description | Audience |
 |----------|-------------|----------|
 | [Epics & Stories](epics-and-stories.md) | Backlog с user stories в Gherkin формате | SM, Dev, QA |
+
+### Research Documents
+
+| Document | Description | Audience |
+|----------|-------------|----------|
+| [Agent Simulations](research/agent-simulations.md) | Исследование агентных симуляций, Game AI, BDI, Generative Agents | Dev, Architect |
+| [Marxism Guide](research/marxism-guide.md) | Марксистская теория с примерами для моделирования | Dev, Architect, PM |
 
 ---
 
@@ -223,10 +233,24 @@ This documentation follows the [BMAD-METHOD](https://github.com/bmad-code-org/BM
 
 ## Resources
 
-### External
+### External - BMAD
 
 - [BMAD-METHOD GitHub](https://github.com/bmad-code-org/BMAD-METHOD)
 - [BMAD Documentation](https://docs.bmad-method.org/)
+
+### External - Agent Simulations
+
+- [Generative Agents (Stanford)](https://arxiv.org/abs/2304.03442) — Memory Stream, Reflection, Planning
+- [BDI Agents: From Theory to Practice](https://cdn.aaai.org/ICMAS/1995/ICMAS95-042.pdf) — BDI Architecture
+- [Simulation Principles from Dwarf Fortress](http://www.gameaipro.com/GameAIPro2/GameAIPro2_Chapter41_Simulation_Principles_from_Dwarf_Fortress.pdf) — Emergent Narrative
+- [The Genius AI Behind The Sims](https://gmtk.substack.com/p/the-genius-ai-behind-the-sims) — Utility AI
+
+### External - Marxism
+
+- [Base and superstructure - Wikipedia](https://en.wikipedia.org/wiki/Base_and_superstructure)
+- [Historical materialism - Wikipedia](https://en.wikipedia.org/wiki/Historical_materialism)
+- [Chris Harman: Base and Superstructure](https://www.marxists.org/archive/harman/1986/xx/base-super.html)
+- [Marx's Capital, Volume 1](https://www.marxists.org/archive/marx/works/1867-c1/)
 
 ### Internal
 
