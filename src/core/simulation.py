@@ -772,6 +772,87 @@ class Simulation:
 
         return "socialize"
 
+    def _try_claim_land(self, npc: SimulationNPC) -> Optional[str]:
+        """
+        Пытается захватить землю как частную собственность.
+
+        Условия для захвата:
+        - NPC накопил достаточно ресурсов (излишек)
+        - NPC находится на незанятой земле
+        - Вероятность зависит от черт характера
+
+        Возвращает описание события или None.
+        """
+        # Проверяем, есть ли излишек ресурсов (признак прибавочного продукта)
+        total_food = npc.inventory.get_food_amount()
+        total_value = npc.inventory.total_value()
+
+        # Нужен значимый излишек для возникновения частной собственности
+        surplus_threshold = 10.0
+        if total_food < surplus_threshold and total_value < surplus_threshold * 2:
+            return None
+
+        # Вероятность захвата зависит от черт характера
+        base_chance = 0.001  # Базовая вероятность за тик
+
+        # Жадные NPC чаще захватывают землю
+        if "greedy" in npc.traits:
+            base_chance *= 3.0
+
+        # Агрессивные тоже более склонны к захвату
+        if "aggressive" in npc.traits:
+            base_chance *= 2.0
+
+        # Щедрые реже захватывают
+        if "generous" in npc.traits:
+            base_chance *= 0.3
+
+        # Больше излишков = больше шанс
+        surplus_multiplier = min(3.0, total_value / surplus_threshold)
+        base_chance *= surplus_multiplier
+
+        # Проверяем шанс
+        if random.random() > base_chance:
+            return None
+
+        # Пытаемся захватить землю в текущей позиции NPC
+        x, y = int(npc.position.x), int(npc.position.y)
+
+        # Захватываем как частную собственность
+        prop = self.ownership.claim_land(
+            x=x,
+            y=y,
+            claimer_id=npc.id,
+            year=self.year,
+            as_private=True
+        )
+
+        if prop:
+            # Публикуем событие
+            from .events import Event, EventType, EventImportance
+            # Первое возникновение частной собственности - историческое событие
+            # Последующие - важные, но не исторические
+            importance = EventImportance.HISTORIC if not self.ownership.private_property_emerged else EventImportance.NOTABLE
+            event = Event(
+                event_type=EventType.PROPERTY_CLAIMED,
+                year=self.year,
+                month=self.month,
+                day=self.day,
+                actor_id=npc.id,
+                data={
+                    "property_id": prop.property_id,
+                    "category": prop.category.value,
+                    "location": (x, y),
+                    "as_private": True,
+                },
+                importance=importance,
+            )
+            self.event_bus.publish(event)
+
+            return f"{npc.name} захватил землю ({x}, {y}) как частную собственность!"
+
+        return None
+
     def _execute_action(self, npc: SimulationNPC, action: str) -> List[str]:
         """Выполняет действие NPC"""
         events = []
@@ -806,6 +887,11 @@ class Simulation:
                 if discovery:
                     events.append(f"{npc.name} открыл: {discovery.name}!")
 
+                # Попытка захватить землю при накоплении излишка (INT-002)
+                claim_event = self._try_claim_land(npc)
+                if claim_event:
+                    events.append(claim_event)
+
         elif action == "hunt":
             skill = npc.get_skill("hunting")
             success = random.random() < (0.3 + skill / 200)
@@ -815,6 +901,11 @@ class Simulation:
                 npc.inventory.add(Resource(ResourceType.MEAT, quantity=amount))
                 npc.set_skill("hunting", skill + 1)
                 events.append(f"{npc.name} добыл дичь")
+
+                # Попытка захватить землю при накоплении излишка (INT-002)
+                claim_event = self._try_claim_land(npc)
+                if claim_event:
+                    events.append(claim_event)
 
             npc.energy -= 20
             npc.hunger += 10
