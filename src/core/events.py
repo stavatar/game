@@ -43,8 +43,11 @@ class EventType(Enum):
     CLASS_EMERGED = auto()
     RELATIONSHIP_CHANGED = auto()
     CONFLICT_STARTED = auto()
+    CONFLICT_ESCALATED = auto()
     CONFLICT_RESOLVED = auto()
     REBELLION = auto()
+    CONSCIOUSNESS_SPREAD = auto()
+    INTELLECTUAL_EMERGED = auto()
 
     # === Культура ===
     BELIEF_FORMED = auto()
@@ -301,4 +304,140 @@ def create_class_emergence_event(class_name: str, members: List[str],
         year=year,
         data={"class_name": class_name, "member_count": len(members)},
         description=f"Возник новый социальный класс: {class_name} ({len(members)} чел.)"
+    )
+
+
+def create_conflict_started_event(
+    conflict_id: str,
+    conflict_type: str,
+    oppressed_class: str,
+    ruling_class: str,
+    cause: str,
+    year: int
+) -> Event:
+    """Создаёт событие начала классового конфликта"""
+    return Event(
+        event_type=EventType.CONFLICT_STARTED,
+        importance=EventImportance.MAJOR,
+        year=year,
+        data={
+            "conflict_id": conflict_id,
+            "conflict_type": conflict_type,
+            "oppressed_class": oppressed_class,
+            "ruling_class": ruling_class,
+            "cause": cause
+        },
+        description=(
+            f"Начался {conflict_type}: {oppressed_class} против {ruling_class}. "
+            f"Причина: {cause}"
+        )
+    )
+
+
+def create_conflict_escalated_event(
+    conflict_id: str,
+    new_stage: str,
+    new_type: str,
+    intensity: float,
+    year: int
+) -> Event:
+    """Создаёт событие эскалации конфликта"""
+    return Event(
+        event_type=EventType.CONFLICT_ESCALATED,
+        importance=EventImportance.IMPORTANT,
+        year=year,
+        data={
+            "conflict_id": conflict_id,
+            "new_stage": new_stage,
+            "new_type": new_type,
+            "intensity": intensity
+        },
+        description=f"Конфликт обострился: {new_type} (интенсивность: {intensity:.0%})"
+    )
+
+
+def create_conflict_resolved_event(
+    conflict_id: str,
+    outcome: str,
+    consequences: List[str],
+    year: int
+) -> Event:
+    """Создаёт событие разрешения конфликта"""
+    importance = EventImportance.MAJOR
+    if outcome in ["революция", "победа"]:
+        importance = EventImportance.HISTORIC
+
+    return Event(
+        event_type=EventType.CONFLICT_RESOLVED,
+        importance=importance,
+        year=year,
+        data={
+            "conflict_id": conflict_id,
+            "outcome": outcome,
+            "consequences": consequences
+        },
+        description=f"Конфликт завершён: {outcome}. " + "; ".join(consequences[:3])
+    )
+
+
+def create_consciousness_spread_event(
+    from_npc_id: str,
+    to_npc_id: str,
+    class_name: str,
+    amount: float,
+    year: int
+) -> Event:
+    """Создаёт событие распространения классового сознания"""
+    return Event(
+        event_type=EventType.CONSCIOUSNESS_SPREAD,
+        importance=EventImportance.MINOR,
+        year=year,
+        actor_id=from_npc_id,
+        target_id=to_npc_id,
+        data={
+            "class_name": class_name,
+            "amount": amount
+        },
+        description_template="{actor} повлиял на классовое сознание {target}"
+    )
+
+
+def create_intellectual_emerged_event(
+    npc_id: str,
+    class_name: str,
+    year: int
+) -> Event:
+    """Создаёт событие появления органического интеллектуала"""
+    return Event(
+        event_type=EventType.INTELLECTUAL_EMERGED,
+        importance=EventImportance.NOTABLE,
+        year=year,
+        actor_id=npc_id,
+        data={"class_name": class_name},
+        description_template=(
+            "{actor} стал органическим интеллектуалом класса {class_name}"
+        )
+    )
+
+
+def create_rebellion_event(
+    leader_ids: List[str],
+    oppressed_class: str,
+    participant_count: int,
+    year: int
+) -> Event:
+    """Создаёт событие революции/восстания"""
+    return Event(
+        event_type=EventType.REBELLION,
+        importance=EventImportance.HISTORIC,
+        year=year,
+        data={
+            "leaders": leader_ids,
+            "oppressed_class": oppressed_class,
+            "participant_count": participant_count
+        },
+        description=(
+            f"Революция! Класс {oppressed_class} восстал. "
+            f"Участников: {participant_count}"
+        )
     )

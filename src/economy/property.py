@@ -243,6 +243,27 @@ class OwnershipSystem:
                 land_owners.add(prop.owner_id)
         return all_npc_ids - land_owners
 
+    def owns_land(self, owner_id: str) -> bool:
+        """Проверяет, владеет ли NPC землёй"""
+        for prop in self.get_owner_properties(owner_id):
+            if prop.category == PropertyCategory.LAND:
+                return True
+        return False
+
+    def owns_tools(self, owner_id: str) -> bool:
+        """Проверяет, владеет ли NPC орудиями производства"""
+        for prop in self.get_owner_properties(owner_id):
+            if prop.category == PropertyCategory.TOOLS:
+                return True
+        return False
+
+    def owns_livestock(self, owner_id: str) -> bool:
+        """Проверяет, владеет ли NPC скотом"""
+        for prop in self.get_owner_properties(owner_id):
+            if prop.category == PropertyCategory.LIVESTOCK:
+                return True
+        return False
+
     def calculate_inequality(self) -> float:
         """
         Вычисляет коэффициент неравенства (0-1).

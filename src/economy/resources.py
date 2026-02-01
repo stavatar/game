@@ -251,6 +251,10 @@ class Inventory:
         """Возвращает количество еды"""
         return sum(r.quantity for r in self.resources.values() if r.is_food())
 
+    def total_value(self) -> float:
+        """Возвращает общую ценность ресурсов"""
+        return sum(r.quantity * r.quality for r in self.resources.values())
+
     def get_best_tool(self, for_activity: str = None) -> Optional[Resource]:
         """Возвращает лучшее орудие"""
         tools = [r for r in self.resources.values() if r.is_tool() and r.is_usable()]

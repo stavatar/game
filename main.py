@@ -18,6 +18,7 @@ import time
 
 from src.core.simulation import Simulation
 from src.core.config import Config, SimulationSpeed
+from src.persistence import SaveManager, SaveError, LoadError
 
 
 def clear_screen():
@@ -25,35 +26,109 @@ def clear_screen():
     print("\033[H\033[J", end="")
 
 
-def main():
-    """Главная функция"""
+def show_main_menu() -> str:
+    """Показывает главное меню и возвращает выбор"""
     print("=" * 60)
     print("БАЗИС И НАДСТРОЙКА")
     print("Симулятор развития общества")
     print("=" * 60)
     print()
-    print("Инициализация мира...")
+    print("  1 - Новая игра")
+    print("  2 - Загрузить сохранение")
+    print("  3 - Выход")
+    print()
+    return input("> ").strip()
 
-    # Создаём симуляцию
-    config = Config(
-        initial_population=12,
-        initial_families=3,
-        map_width=40,
-        map_height=40,
-    )
 
-    sim = Simulation(config)
-    init_events = sim.initialize()
+def show_load_menu(save_manager: SaveManager) -> str:
+    """Показывает меню загрузки, возвращает путь к файлу или пустую строку"""
+    saves = save_manager.list_saves()
 
-    print(f"Создано {len(sim.npcs)} жителей")
+    if not saves:
+        print("\nНет доступных сохранений.")
+        input("Enter...")
+        return ""
+
+    print("\n=== СОХРАНЕНИЯ ===")
+    for i, save in enumerate(saves, 1):
+        size_kb = save.size_bytes / 1024
+        print(f"  {i}. {save.save_name}")
+        print(f"     Год: {save.year}, Население: {save.population}, Эпоха: {save.era}")
+        print(f"     Создано: {save.created_at[:19]}, Размер: {size_kb:.1f} KB")
+        print()
+
+    print("  0 - Назад")
     print()
 
-    # Показываем начальные события
-    for event in init_events[:10]:
-        print(f"  • {event}")
+    try:
+        choice = input("> ").strip()
+        if choice == "0" or not choice:
+            return ""
+        idx = int(choice) - 1
+        if 0 <= idx < len(saves):
+            return saves[idx].filepath
+    except ValueError:
+        pass
 
-    print()
-    input("Нажмите Enter для начала симуляции...")
+    print("Неверный выбор.")
+    return ""
+
+
+def main():
+    """Главная функция"""
+    save_manager = SaveManager()
+
+    # Главное меню
+    while True:
+        choice = show_main_menu()
+
+        if choice == "3" or choice.lower() == "q":
+            print("До свидания!")
+            return
+
+        elif choice == "2":
+            # Загрузка
+            filepath = show_load_menu(save_manager)
+            if filepath:
+                try:
+                    print(f"\nЗагрузка {filepath}...")
+                    config = Config()  # Базовый конфиг, будет перезаписан
+                    sim = Simulation(config)
+                    save_manager.load(filepath, sim)
+                    print(f"Загружено: год {sim.year}, население {len(sim.npcs)}")
+                    input("Enter...")
+                    break
+                except LoadError as e:
+                    print(f"\nОшибка загрузки: {e}")
+                    input("Enter...")
+            continue
+
+        elif choice == "1":
+            # Новая игра
+            print()
+            print("Инициализация мира...")
+
+            config = Config(
+                initial_population=12,
+                initial_families=3,
+                map_width=40,
+                map_height=40,
+            )
+
+            sim = Simulation(config)
+            init_events = sim.initialize()
+
+            print(f"Создано {len(sim.npcs)} жителей")
+            print()
+
+            for event in init_events[:10]:
+                print(f"  • {event}")
+
+            print()
+            input("Нажмите Enter для начала симуляции...")
+            break
+        else:
+            continue
 
     # Главный цикл
     running = True
@@ -85,6 +160,7 @@ def main():
             print("Команды:")
             print("  1 - Час          2 - День       3 - Месяц")
             print("  4 - Год          5 - Жители     6 - Статистика")
+            print("  s - Сохранить    l - Загрузить  f - Быстрое сохр.")
             print("  a - Авто-режим   q - Выход")
 
         if auto_mode:
@@ -163,6 +239,37 @@ def main():
         elif cmd == "a":
             auto_mode = True
             print("Авто-режим включён. Нажмите Ctrl+C для выхода.")
+
+        elif cmd == "s":
+            # Сохранение
+            print("\nВведите имя сохранения (или Enter для авто):")
+            name = input("> ").strip()
+            try:
+                filepath = save_manager.save(sim, name if name else None)
+                print(f"Сохранено: {filepath}")
+            except SaveError as e:
+                print(f"Ошибка сохранения: {e}")
+            input("Enter...")
+
+        elif cmd == "l":
+            # Загрузка
+            filepath = show_load_menu(save_manager)
+            if filepath:
+                try:
+                    save_manager.load(filepath, sim)
+                    print(f"Загружено: год {sim.year}, население {len(sim.npcs)}")
+                except LoadError as e:
+                    print(f"Ошибка загрузки: {e}")
+                input("Enter...")
+
+        elif cmd == "f":
+            # Быстрое сохранение
+            try:
+                filepath = save_manager.quick_save(sim)
+                print(f"Быстрое сохранение: {filepath}")
+            except SaveError as e:
+                print(f"Ошибка: {e}")
+            input("Enter...")
 
     print("\nСимуляция завершена.")
     print(f"Прошло {sim.year} лет, {sim.generations} поколений.")

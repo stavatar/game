@@ -72,6 +72,16 @@ class NPCState:
     def can_work(self) -> bool:
         return self.is_alive and self.is_adult() and self.health > 20
 
+    @property
+    def x(self) -> float:
+        """Координата X для UI"""
+        return self.position.x
+
+    @property
+    def y(self) -> float:
+        """Координата Y для UI"""
+        return self.position.y
+
 
 class Simulation:
     """
@@ -124,6 +134,38 @@ class Simulation:
         # Статистика
         self.total_days: int = 0
         self.generations: int = 1
+
+        # Кэш для UI
+        self._world_map_cache: List[List[str]] = None
+        self._world_map_dirty: bool = True
+
+    @property
+    def world_map(self) -> List[List[str]]:
+        """
+        Возвращает 2D массив символов карты для UI.
+
+        Кэшируется для производительности.
+        """
+        if self._world_map_dirty or self._world_map_cache is None:
+            self._world_map_cache = self._build_world_map()
+            self._world_map_dirty = False
+        return self._world_map_cache
+
+    def _build_world_map(self) -> List[List[str]]:
+        """Строит 2D массив символов карты"""
+        result = []
+        for y in range(self.map.height):
+            row = []
+            for x in range(self.map.width):
+                tile = self.map.get_tile(x, y)
+                if tile:
+                    # Используем символ из свойств тайла
+                    symbol = tile.get_symbol()
+                else:
+                    symbol = '.'
+                row.append(symbol)
+            result.append(row)
+        return result
 
     def initialize(self) -> List[str]:
         """Инициализирует мир с начальной популяцией"""
@@ -279,6 +321,17 @@ class Simulation:
         climate_events = self.climate.update(day_of_year, self.year)
         events.extend(climate_events)
 
+        # Проверяем катаклизмы и их влияние на классовое сознание
+        if self.climate.active_disasters:
+            for disaster in self.climate.active_disasters:
+                crisis_severity = disaster.severity
+                consciousness_boost = self.classes.apply_crisis_effect(crisis_severity)
+                if consciousness_boost > 0.1:
+                    events.append(
+                        f"Кризис ({disaster.disaster_type.value}) "
+                        f"усилил классовое сознание (+{consciousness_boost:.0%})"
+                    )
+
         # Потребности NPC
         for npc in self.npcs.values():
             if not npc.is_alive:
@@ -316,7 +369,76 @@ class Simulation:
         if new_belief:
             events.append(f"Возникло верование: {new_belief.name}")
 
+        # === КЛАССОВЫЕ КОНФЛИКТЫ ===
+        conflict_events = self._process_class_conflicts()
+        events.extend(conflict_events)
+
         return events
+
+    def _process_class_conflicts(self) -> List[str]:
+        """
+        Обрабатывает классовые конфликты.
+
+        По марксистской теории:
+        1. Обновляем существующие конфликты
+        2. Проверяем возникновение новых
+        3. Распространяем классовое сознание
+        """
+        events = []
+
+        # Обновляем классы NPC на основе собственности
+        self._update_npc_classes()
+
+        # Обновляем существующие конфликты
+        conflict_events = self.classes.update_conflicts(
+            self.year, self.ownership
+        )
+        events.extend(conflict_events)
+
+        # Проверяем возникновение нового конфликта
+        new_conflict = self.classes.check_for_conflict(self.year)
+        if new_conflict:
+            events.append(
+                f"КОНФЛИКТ! {new_conflict.conflict_type.russian_name}: "
+                f"{new_conflict.oppressed_class.russian_name} восстали против "
+                f"{new_conflict.ruling_class.russian_name}. "
+                f"Причина: {new_conflict.primary_cause}"
+            )
+
+        return events
+
+    def _update_npc_classes(self) -> None:
+        """Обновляет классовую принадлежность NPC"""
+        for npc_id, npc in self.npcs.items():
+            if not npc.is_alive:
+                continue
+
+            # Определяем владение
+            owns_land = self.ownership.owns_land(npc_id)
+            owns_tools = self.ownership.owns_tools(npc_id)
+            owns_livestock = False  # Упрощённо
+
+            # Богатство (по инвентарю)
+            wealth = npc.inventory.total_value()
+
+            # Работает ли на других
+            works_for_others = not (owns_land or owns_tools)
+
+            # Определяем класс
+            new_class = self.classes.determine_class(
+                npc_id=npc_id,
+                owns_land=owns_land,
+                owns_tools=owns_tools,
+                owns_livestock=owns_livestock,
+                wealth=wealth,
+                works_for_others=works_for_others,
+                is_elder=npc.age > 50 and "peaceful" in npc.traits,
+                is_chief=npc.age > 30 and "aggressive" in npc.traits and wealth > 100,
+                private_property_exists=self.ownership.private_property_emerged
+            )
+
+            # Обновляем класс
+            changed = self.classes.update_npc_class(npc_id, new_class, self.year)
 
     def _process_new_year(self) -> List[str]:
         """Обрабатывает начало нового года"""

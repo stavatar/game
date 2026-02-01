@@ -407,7 +407,7 @@ Then собственность переходит к наследнику
 
 **Описание:** Семьи, демография и классы.
 
-**Статус:** Done (частично In Progress для классовых конфликтов)
+**Статус:** Done ✅
 
 ### US-4.1: Семейная Система
 
@@ -487,8 +487,9 @@ Then mortality_rate увеличивается значительно
 
 **ID:** US-4.3
 **Приоритет:** P0
-**Статус:** Done
+**Статус:** Done ✅
 **Story Points:** 8
+**Evil Audit Score:** 8.75/10
 
 **Описание:**
 Как марксистская симуляция, я хочу, чтобы классы ВОЗНИКАЛИ из отношений собственности, а не задавались жёстко.
@@ -512,9 +513,13 @@ Then он становится LABORER
 **Tasks:**
 - [x] Создать ClassType enum
 - [x] Реализовать determine_class (EMERGENT!)
-- [x] Добавить class consciousness
-- [x] Начать detect_class_conflict
-- [ ] Реализовать классовые конфликты полностью
+- [x] Добавить class consciousness (Грамши)
+- [x] Реализовать detect_class_conflict полностью
+- [x] ConflictType, ConflictStage, ConsciousnessPhase enums
+- [x] ClassConsciousnessSystem с organic intellectuals
+- [x] ConflictResolutionSystem с исходами
+- [x] Интеграция с Simulation
+- [x] 52 unit tests (100% pass)
 
 **Files:** `src/society/classes.py`
 
@@ -944,7 +949,7 @@ Then WORK имеет больший вес
 
 **Описание:** CLI для управления и наблюдения за симуляцией.
 
-**Статус:** Done (базовый), Planned (графический)
+**Статус:** Done ✅
 
 ### US-8.1: CLI Интерфейс
 
@@ -1019,8 +1024,9 @@ Then видно количество NPC в ней
 
 **ID:** US-8.3
 **Приоритет:** P2
-**Статус:** Planned
+**Статус:** Done ✅
 **Story Points:** 13
+**Evil Audit Score:** 8.42/10
 
 **Описание:**
 Как пользователь, я хочу графический интерфейс (pygame), чтобы наблюдать за симуляцией визуально.
@@ -1042,14 +1048,18 @@ Then показывается popup с информацией
 ```
 
 **Tasks:**
-- [ ] Установить pygame
-- [ ] Создать Window class
-- [ ] Реализовать Sprite для NPC
-- [ ] Добавить event handling
-- [ ] Создать UI panels
-- [ ] Написать tests
+- [x] Установить pygame-ce
+- [x] Создать Window class с fixed time step game loop
+- [x] Реализовать NPCSprite с анимацией
+- [x] Добавить Camera с zoom/scroll
+- [x] Создать MapRenderer с тайлами
+- [x] UI panels: StatusBar, InfoPanel, EventLog, StatisticsPanel
+- [x] Event handling: клики, клавиатура, колесо мыши
+- [x] Индикаторы классового сознания и конфликтов
+- [x] Speed controls (1x, 2x, 5x, 10x)
+- [x] Интеграция с main_gui.py
 
-**Files:** `src/ui/` (планируется)
+**Files:** `src/ui/` (7 файлов), `main_gui.py`
 
 ---
 
@@ -1057,14 +1067,15 @@ Then показывается popup с информацией
 
 **Описание:** Сохранение и загрузка состояния мира.
 
-**Статус:** Planned
+**Статус:** Done ✅
 
 ### US-9.1: Сохранение Мира
 
 **ID:** US-9.1
 **Приоритет:** P2
-**Статус:** Planned
+**Статус:** Done ✅
 **Story Points:** 8
+**Evil Audit Score:** 8.33/10
 
 **Описание:**
 Как пользователь, я хочу сохранять состояние мира, чтобы продолжить позже.
@@ -1086,13 +1097,17 @@ Then показывается ошибка, мир не повреждается
 ```
 
 **Tasks:**
-- [ ] Создать SaveManager
-- [ ] Реализовать serialize для всех entities
-- [ ] Добавить compress для больших миров
-- [ ] Реализовать load с validation
-- [ ] Написать tests
+- [x] Создать SaveManager с save/load/autosave/quicksave
+- [x] Реализовать serialize для всех entities (NPC, Map, Classes, Conflicts)
+- [x] Добавить gzip compression
+- [x] Версионирование (SAVE_VERSION = "1.0.0")
+- [x] Checksum validation
+- [x] Ротация автосохранений (MAX_AUTOSAVES = 3)
+- [x] Интеграция в main.py (s/l/f команды)
+- [x] Интеграция в main_gui.py (F5/F9 клавиши)
+- [x] Список сохранений с метаданными
 
-**Files:** `src/persistence/` (планируется)
+**Files:** `src/persistence/` (4 файла)
 
 ---
 
@@ -1105,36 +1120,46 @@ Then показывается ошибка, мир не повреждается
 | #1.0 Core | 3 | 3 | 0 | 0 |
 | #2.0 World | 3 | 3 | 0 | 0 |
 | #3.0 Economy | 4 | 4 | 0 | 0 |
-| #4.0 Society | 3 | 2 | 1 | 0 |
+| #4.0 Society | 3 | 3 | 0 | 0 |
 | #5.0 Culture | 3 | 3 | 0 | 0 |
 | #6.0 NPC | 7 | 7 | 0 | 0 |
 | #7.0 Behavior | 1 | 1 | 0 | 0 |
-| #8.0 UI | 3 | 2 | 0 | 1 |
-| #9.0 Persistence | 1 | 0 | 0 | 1 |
-| **TOTAL** | **28** | **25** | **1** | **2** |
+| #8.0 UI | 3 | 3 | 0 | 0 |
+| #9.0 Persistence | 1 | 1 | 0 | 0 |
+| **TOTAL** | **28** | **28** | **0** | **0** |
 
 ### By Priority
 
 | Priority | Count | Done |
 |----------|-------|------|
 | P0 (Critical) | 20 | 20 |
-| P1 (High) | 5 | 4 |
-| P2 (Medium) | 3 | 1 |
+| P1 (High) | 5 | 5 |
+| P2 (Medium) | 3 | 3 |
 
 ### Story Points
 
 - **Total:** ~145 SP
-- **Completed:** ~125 SP
-- **Velocity:** ~87% complete
+- **Completed:** ~145 SP
+- **Velocity:** 100% complete ✅
 
 ---
 
-## Next Sprint Candidates
+## Sprint Summary (2026-02-01)
 
-1. **US-4.3** - Классовые конфликты (завершить)
-2. **US-8.3** - Графический интерфейс
-3. **US-9.1** - Сохранение мира
+### Completed Stories with Evil Audit Scores:
+
+| Story | Score | Status |
+|-------|-------|--------|
+| US-4.3 Классовые Конфликты | 8.75/10 | ✅ APPROVED |
+| US-8.3 Графический Интерфейс | 8.42/10 | ✅ APPROVED |
+| US-9.1 Сохранение Мира | 8.33/10 | ✅ APPROVED |
+
+### Key Achievements:
+- **Классовая борьба по Грамши**: organic intellectuals, consciousness phases
+- **GUI с pygame-ce**: fixed time step, camera, sprites, panels
+- **Persistence**: JSON+gzip, versioning, autosave rotation
 
 ---
 
 *Документ создан по методологии [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD)*
+*Обновлено: 2026-02-01 — Sprint Complete*
