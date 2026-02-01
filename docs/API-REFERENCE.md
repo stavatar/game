@@ -1,3 +1,12 @@
+---
+title: "API Reference: Базис и Надстройка"
+description: "Справочник по ключевым классам и функциям симуляции"
+version: "1.0.0"
+language: "ru"
+keywords: ["api", "reference", "classes", "functions", "simulation", "npc", "events"]
+last_updated: "2026-02-01"
+---
+
 # API Reference
 
 Справочник по ключевым классам и функциям симуляции первобытной общины.
