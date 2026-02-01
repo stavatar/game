@@ -553,6 +553,52 @@ class Simulation:
             "wage_labor_exists": wage_labor_exists,
         }
 
+    def _get_social_conditions(self) -> Dict[str, any]:
+        """
+        Собирает социальные условия из всех систем.
+
+        Возвращает словарь с ключами:
+        - deaths_occurred: количество смертей в этом году
+        - births_occurred: количество рождений в этом году
+        - classes_emerged: возникли ли классы
+        - class_tension: напряжённость между классами (0-1)
+        - active_conflicts: количество активных классовых конфликтов
+        - active_marriages: количество активных браков
+        - total_families: количество семей
+        - population: текущее население
+        - life_expectancy: ожидаемая продолжительность жизни
+        """
+        # Население
+        living_npcs = [n for n in self.npcs.values() if n.is_alive]
+        population = len(living_npcs)
+
+        # Демографические метрики
+        deaths_occurred = self.demography.deaths_this_year
+        births_occurred = self.demography.births_this_year
+        life_expectancy = self.demography.calculate_life_expectancy()
+
+        # Семейные метрики
+        family_stats = self.families.get_statistics()
+        active_marriages = family_stats.get("active_marriages", 0)
+        total_families = family_stats.get("families", 0)
+
+        # Классовые метрики
+        classes_emerged = self.classes.classes_emerged
+        class_tension = self.classes.check_class_tension() if classes_emerged else 0.0
+        active_conflicts = len(self.classes.get_active_conflicts())
+
+        return {
+            "deaths_occurred": deaths_occurred,
+            "births_occurred": births_occurred,
+            "classes_emerged": classes_emerged,
+            "class_tension": class_tension,
+            "active_conflicts": active_conflicts,
+            "active_marriages": active_marriages,
+            "total_families": total_families,
+            "population": population,
+            "life_expectancy": life_expectancy,
+        }
+
     def _find_heir(self, deceased_id: str) -> Optional[str]:
         """
         Находит наследника для умершего NPC.
@@ -651,7 +697,7 @@ class Simulation:
         # Начальные верования - сначала создаем базовое верование анимизм
         # (возникает естественно при взаимодействии с природой)
         economic_conditions = self._get_economic_conditions()
-        social_conditions = {"deaths_occurred": 0}
+        social_conditions = self._get_social_conditions()
         initial_belief = self.beliefs.check_belief_emergence(
             economic_conditions, social_conditions, self.year
         )
@@ -870,10 +916,7 @@ class Simulation:
 
         # === ВЕРОВАНИЯ: проверяем возникновение новых ===
         economic_conditions = self._get_economic_conditions()
-        social_conditions = {
-            "deaths_occurred": self.demography.deaths_this_year,
-            "classes_emerged": self.classes.classes_emerged,
-        }
+        social_conditions = self._get_social_conditions()
 
         new_belief = self.beliefs.check_belief_emergence(
             economic_conditions, social_conditions, self.year
