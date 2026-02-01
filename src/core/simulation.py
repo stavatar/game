@@ -29,7 +29,167 @@ from ..culture.beliefs import BeliefSystem
 from ..culture.traditions import TraditionSystem
 from ..culture.norms import NormSystem
 
+# Unified NPC model imports
+from ..npc.character import NPC, Gender, Occupation, Stats, Skills
+from ..npc.needs import Need
 
+
+@dataclass
+class SimulationNPC(NPC):
+    """
+    NPC для симуляции - расширяет базовый NPC класс полями для симуляции.
+
+    Добавляет:
+    - position: Координаты на карте
+    - inventory: Инвентарь из экономической системы
+    - family_id, spouse_id: Прямые ссылки на семью
+
+    Также добавляет свойства совместимости для перехода с NPCState:
+    - is_female, x, y, hunger, energy, happiness
+    """
+
+    # Позиция на карте (для симуляции)
+    position: Position = field(default_factory=lambda: Position(25, 25))
+
+    # Инвентарь (экономическая система)
+    inventory: Inventory = None
+
+    # Прямые ссылки на семью (для совместимости с FamilySystem)
+    family_id: Optional[str] = None
+    spouse_id: Optional[str] = None
+
+    # Словарь навыков для обратной совместимости с симуляцией
+    _skill_dict: Dict[str, int] = field(default_factory=dict)
+
+    # Легаси черты характера (для обратной совместимости)
+    _legacy_traits: List[str] = field(default_factory=list)
+
+    def __post_init__(self):
+        """Инициализация после создания"""
+        # Вызываем родительский __post_init__
+        super().__post_init__()
+
+        # Инициализируем инвентарь если не задан
+        if self.inventory is None:
+            self.inventory = Inventory(owner_id=self.id)
+
+    # === Свойства совместимости с NPCState ===
+
+    @property
+    def is_female(self) -> bool:
+        """Совместимость: возвращает True если женщина"""
+        return self.gender == Gender.FEMALE
+
+    @property
+    def x(self) -> float:
+        """Координата X для UI"""
+        return self.position.x if self.position else 0.0
+
+    @property
+    def y(self) -> float:
+        """Координата Y для UI"""
+        return self.position.y if self.position else 0.0
+
+    @property
+    def hunger(self) -> float:
+        """
+        Уровень голода (0-100, выше = голоднее).
+
+        ВНИМАНИЕ: Инвертирован относительно Needs системы!
+        Needs.HUNGER.value=100 означает сытость,
+        а hunger=100 означает сильный голод.
+        """
+        return 100 - self.needs.get(Need.HUNGER).value
+
+    @hunger.setter
+    def hunger(self, value: float):
+        """Устанавливает уровень голода (инвертируя для Needs)"""
+        self.needs.get(Need.HUNGER).value = 100 - value
+
+    @property
+    def energy(self) -> float:
+        """Уровень энергии (0-100)"""
+        return self.needs.get(Need.ENERGY).value
+
+    @energy.setter
+    def energy(self, value: float):
+        """Устанавливает уровень энергии"""
+        self.needs.get(Need.ENERGY).value = min(100, max(0, value))
+
+    @property
+    def happiness(self) -> float:
+        """Уровень счастья (0-100)"""
+        return self.needs.get_overall_happiness()
+
+    @property
+    def traits(self) -> List[str]:
+        """
+        Возвращает черты характера как список строк.
+
+        Возвращает легаси черты если они есть, иначе черты из Personality.
+        """
+        if self._legacy_traits:
+            return self._legacy_traits
+
+        return [trait.name.lower() for trait in self.personality.traits]
+
+    @traits.setter
+    def traits(self, value: List[str]):
+        """Устанавливает легаси черты"""
+        self._legacy_traits = value
+
+    @property
+    def intelligence(self) -> int:
+        """Интеллект из Stats"""
+        return self.stats.intelligence
+
+    # === Методы совместимости с NPCState ===
+
+    def is_adult(self) -> bool:
+        """Является ли взрослым (16+ лет)"""
+        return self.age >= 16
+
+    def can_work(self) -> bool:
+        """Может ли работать"""
+        return self.is_alive and self.is_adult() and self.health > 20
+
+    def get_skill(self, skill_name: str) -> int:
+        """
+        Получить значение навыка.
+        Сначала проверяет _skill_dict, затем Skills объект.
+        """
+        # Проверяем словарь навыков (для совместимости)
+        if skill_name in self._skill_dict:
+            return self._skill_dict[skill_name]
+
+        # Маппинг имён навыков
+        skill_mapping = {
+            "gathering": "farming",  # Собирательство -> фермерство
+            "hunting": "combat",     # Охота -> бой
+            "crafting": "crafting",
+            "trading": "trading",
+            "cooking": "cooking",
+            "medicine": "medicine",
+        }
+
+        mapped_name = skill_mapping.get(skill_name, skill_name)
+        if hasattr(self.skills, mapped_name):
+            return getattr(self.skills, mapped_name)
+
+        return 0
+
+    def set_skill(self, skill_name: str, value: int) -> None:
+        """Устанавливает значение навыка"""
+        self._skill_dict[skill_name] = min(100, max(0, value))
+
+    # Для совместимости с npc.skills.get("name", 0)
+    @property
+    def skill_dict(self) -> Dict[str, int]:
+        """Возвращает словарь навыков для совместимости"""
+        return self._skill_dict
+
+
+# Legacy NPCState - сохраняем для обратной совместимости до subtask-0-3
 @dataclass
 class NPCState:
     """Состояние NPC в симуляции"""
@@ -124,8 +284,8 @@ class Simulation:
         self.traditions = TraditionSystem()
         self.norms = NormSystem()
 
-        # NPC
-        self.npcs: Dict[str, NPCState] = {}
+        # NPC (unified model - SimulationNPC extends NPC)
+        self.npcs: Dict[str, SimulationNPC] = {}
 
         # События
         self.event_bus = EventBus()
@@ -216,8 +376,18 @@ class Simulation:
 
     def _create_npc(self, is_female: bool = False,
                     family_name: str = None,
-                    age: int = None) -> NPCState:
-        """Создаёт нового NPC"""
+                    age: int = None) -> SimulationNPC:
+        """
+        Создаёт нового NPC используя унифицированную модель SimulationNPC.
+
+        Args:
+            is_female: Пол (True = женщина)
+            family_name: Фамилия (для семей)
+            age: Возраст (если None - случайный)
+
+        Returns:
+            SimulationNPC: Созданный NPC
+        """
         npc_id = f"npc_{len(self.npcs) + 1}"
 
         # Имена
@@ -232,25 +402,31 @@ class Simulation:
                 self.config.starting_age_max
             )
 
-        npc = NPCState(
+        # Создаём SimulationNPC (расширенный NPC)
+        npc = SimulationNPC(
             id=npc_id,
             name=name,
+            surname=family_name or "",
+            gender=Gender.FEMALE if is_female else Gender.MALE,
             age=age,
-            is_female=is_female,
             position=Position(
                 self.map.width // 2 + random.randint(-5, 5),
                 self.map.height // 2 + random.randint(-5, 5),
             ),
-            intelligence=random.randint(7, 14),
-            skills={
-                "gathering": random.randint(0, 20),
-                "hunting": random.randint(0, 15),
-                "crafting": random.randint(0, 10),
-            },
-            traits=random.sample(
-                ["curious", "lazy", "hardworking", "aggressive", "peaceful", "greedy", "generous"],
-                k=random.randint(1, 3)
-            ),
+            stats=Stats(intelligence=random.randint(7, 14)),
+        )
+
+        # Инициализируем навыки (словарь для совместимости)
+        npc._skill_dict = {
+            "gathering": random.randint(0, 20),
+            "hunting": random.randint(0, 15),
+            "crafting": random.randint(0, 10),
+        }
+
+        # Легаси черты характера (для совместимости с существующим кодом)
+        npc._legacy_traits = random.sample(
+            ["curious", "lazy", "hardworking", "aggressive", "peaceful", "greedy", "generous"],
+            k=random.randint(1, 3)
         )
 
         # Начальные ресурсы
@@ -481,7 +657,7 @@ class Simulation:
 
         return events
 
-    def _decide_action(self, npc: NPCState) -> str:
+    def _decide_action(self, npc: SimulationNPC) -> str:
         """Решает, что делать NPC"""
         # Приоритет: голод -> работа -> социализация
 
@@ -500,12 +676,12 @@ class Simulation:
 
         if productivity.get("gathering", 0) > 0.5:
             return "gather"
-        if productivity.get("hunting", 0) > 0.5 and "hunting" in npc.skills:
+        if productivity.get("hunting", 0) > 0.5 and npc.get_skill("hunting") > 0:
             return "hunt"
 
         return "socialize"
 
-    def _execute_action(self, npc: NPCState, action: str) -> List[str]:
+    def _execute_action(self, npc: SimulationNPC, action: str) -> List[str]:
         """Выполняет действие NPC"""
         events = []
 
@@ -520,7 +696,7 @@ class Simulation:
 
         elif action == "gather_food" or action == "gather":
             # Собираем ягоды
-            skill = npc.skills.get("gathering", 0)
+            skill = npc.get_skill("gathering")
             amount = 1 + skill / 50 + random.random()
 
             weather_mod = self.climate.current_weather.gathering_modifier
@@ -528,7 +704,7 @@ class Simulation:
 
             if amount > 0.5:
                 npc.inventory.add(Resource(ResourceType.BERRIES, quantity=amount))
-                npc.skills["gathering"] = min(100, skill + 1)
+                npc.set_skill("gathering", skill + 1)
                 npc.energy -= 10
                 npc.hunger += 5
 
@@ -540,13 +716,13 @@ class Simulation:
                     events.append(f"{npc.name} открыл: {discovery.name}!")
 
         elif action == "hunt":
-            skill = npc.skills.get("hunting", 0)
+            skill = npc.get_skill("hunting")
             success = random.random() < (0.3 + skill / 200)
 
             if success:
                 amount = 2 + skill / 30
                 npc.inventory.add(Resource(ResourceType.MEAT, quantity=amount))
-                npc.skills["hunting"] = min(100, skill + 1)
+                npc.set_skill("hunting", skill + 1)
                 events.append(f"{npc.name} добыл дичь")
 
             npc.energy -= 20
@@ -567,9 +743,10 @@ class Simulation:
                 # Передача знаний
                 my_knowledge = self.knowledge.get_npc_knowledge(npc.id)
                 for tech_id in my_knowledge:
+                    teaching_skill = npc.get_skill("teaching") or 25  # Default if not set
                     if self.knowledge.transfer_knowledge(
                             npc.id, other.id, tech_id, 1.0,
-                            npc.skills.get("teaching", 0.5) / 50,
+                            teaching_skill / 50,
                             other.intelligence
                     ):
                         events.append(f"{npc.name} научил {other.name}: {tech_id}")
