@@ -14,6 +14,7 @@ from .config import Config
 from .events import EventBus, Event, EventType, EventImportance
 from .consistency import validate_state_consistency, ConsistencyLevel
 from .emergence import EmergenceTracker, EmergenceMetrics
+from .dialectics import ContradictionDetector, ContradictionMetrics
 
 from ..world.map import WorldMap, Position
 from ..world.climate import ClimateSystem, Season
@@ -241,6 +242,9 @@ class Simulation:
 
         # Трекер эмерджентности (INT-040)
         self.emergence_tracker = EmergenceTracker()
+
+        # Детектор диалектических противоречий (INT-019)
+        self.contradiction_detector = ContradictionDetector()
 
         # Подписываемся на события
         self._setup_event_subscribers()
@@ -1446,6 +1450,11 @@ class Simulation:
         emergence_events = self._track_emergence()
         events.extend(emergence_events)
 
+        # === ДИАЛЕКТИЧЕСКИЕ ПРОТИВОРЕЧИЯ (INT-019) ===
+        # Обнаруживаем и отслеживаем диалектические противоречия
+        contradiction_events = self._track_contradictions()
+        events.extend(contradiction_events)
+
         # === ПРОВЕРКА СОГЛАСОВАННОСТИ (INT-022) ===
         # Проверяем состояние симуляции раз в год
         consistency_events = self._check_consistency()
@@ -1550,6 +1559,64 @@ class Simulation:
         - Хронологию событий
         """
         return self.emergence_tracker.get_development_report()
+
+    def _track_contradictions(self) -> List[str]:
+        """
+        Отслеживает диалектические противоречия (INT-019).
+
+        По Марксу, развитие общества происходит через разрешение
+        диалектических противоречий. Главное противоречие -
+        между производительными силами и производственными отношениями.
+
+        Выполняется ежегодно для обнаружения:
+        - Новых противоречий
+        - Изменений фазы существующих
+        - Разрешения противоречий
+
+        Возвращает список событий для лога.
+        """
+        events = []
+
+        # Обновляем детектор и получаем новые события
+        new_events = self.contradiction_detector.update(self)
+
+        # Формируем сообщения о новых событиях
+        for event in new_events:
+            event_msg = f"[DIALECTICS] {event.get_summary()}"
+            events.append(event_msg)
+
+        # Каждые 10 лет выводим сводку состояния противоречий
+        if self.year % 10 == 0:
+            metrics = self.contradiction_detector.get_metrics()
+            if metrics.active_contradictions > 0:
+                events.append(
+                    f"[DIALECTICS] Активных противоречий: {metrics.active_contradictions}, "
+                    f"революционный потенциал: {metrics.revolutionary_potential:.0%}"
+                )
+
+        return events
+
+    def get_contradiction_metrics(self) -> ContradictionMetrics:
+        """
+        Возвращает метрики диалектических противоречий.
+
+        Может использоваться для:
+        - Анализа напряжённости в обществе
+        - Прогнозирования социальных изменений
+        - Мониторинга революционного потенциала
+        """
+        return self.contradiction_detector.get_metrics()
+
+    def get_contradiction_report(self) -> str:
+        """
+        Возвращает текстовый отчёт о диалектических противоречиях.
+
+        Включает:
+        - Список активных противоречий
+        - Их интенсивность и фазу
+        - Революционный потенциал
+        """
+        return self.contradiction_detector.get_report()
 
     def _get_npc_terrain_info(self, npc: SimulationNPC) -> dict:
         """
