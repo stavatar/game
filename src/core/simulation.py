@@ -725,14 +725,19 @@ class Simulation:
         Обрабатывает классовые конфликты.
 
         По марксистской теории:
-        1. Обновляем существующие конфликты
-        2. Проверяем возникновение новых
-        3. Распространяем классовое сознание
+        1. Обновляем классы NPC на основе собственности
+        2. Обновляем отношения между классами
+        3. Обновляем существующие конфликты
+        4. Проверяем возникновение новых
+        5. Распространяем классовое сознание
         """
         events = []
 
         # Обновляем классы NPC на основе собственности
         self._update_npc_classes()
+
+        # Обновляем отношения между классами (антагонизм и пр.)
+        self.classes.update_class_relations(self.year)
 
         # Обновляем существующие конфликты
         conflict_events = self.classes.update_conflicts(
@@ -753,23 +758,35 @@ class Simulation:
         return events
 
     def _update_npc_classes(self) -> None:
-        """Обновляет классовую принадлежность NPC"""
+        """
+        Обновляет классовую принадлежность NPC на основе отношений собственности.
+
+        По Марксу, класс определяется отношением к средствам производства:
+        - Владеет землёй/орудиями → LANDOWNER/CRAFTSMAN (эксплуататор)
+        - Не владеет → LABORER/LANDLESS (эксплуатируемый)
+        """
+        # Собираем данные для статистики классов
+        class_wealth: Dict[ClassType, List[float]] = {}
+        class_property: Dict[ClassType, List[int]] = {}
+
         for npc_id, npc in self.npcs.items():
             if not npc.is_alive:
                 continue
 
-            # Определяем владение
+            # Определяем владение средствами производства
             owns_land = self.ownership.owns_land(npc_id)
             owns_tools = self.ownership.owns_tools(npc_id)
-            owns_livestock = False  # Упрощённо
+            owns_livestock = self.ownership.owns_livestock(npc_id)
 
-            # Богатство (по инвентарю)
-            wealth = npc.inventory.total_value()
+            # Богатство (по инвентарю + собственность)
+            inventory_wealth = npc.inventory.total_value()
+            property_wealth = self.ownership.calculate_wealth(npc_id)
+            wealth = inventory_wealth + property_wealth
 
-            # Работает ли на других
-            works_for_others = not (owns_land or owns_tools)
+            # Работает ли на других (не владеет средствами производства)
+            works_for_others = not (owns_land or owns_tools or owns_livestock)
 
-            # Определяем класс
+            # Определяем класс на основе производственных отношений
             new_class = self.classes.determine_class(
                 npc_id=npc_id,
                 owns_land=owns_land,
@@ -782,8 +799,57 @@ class Simulation:
                 private_property_exists=self.ownership.private_property_emerged
             )
 
-            # Обновляем класс
-            changed = self.classes.update_npc_class(npc_id, new_class, self.year)
+            # Обновляем класс NPC
+            self.classes.update_npc_class(npc_id, new_class, self.year)
+
+            # Собираем статистику для класса
+            if new_class not in class_wealth:
+                class_wealth[new_class] = []
+                class_property[new_class] = []
+
+            class_wealth[new_class].append(wealth)
+            property_count = len(self.ownership.get_owner_properties(npc_id))
+            class_property[new_class].append(property_count)
+
+        # Обновляем статистику классов
+        self._update_class_statistics(class_wealth, class_property)
+
+    def _update_class_statistics(
+        self,
+        class_wealth: Dict[ClassType, List[float]],
+        class_property: Dict[ClassType, List[int]]
+    ) -> None:
+        """
+        Обновляет статистику классов: среднее богатство, собственность, власть.
+
+        Политическая власть зависит от:
+        - Богатства класса
+        - Количества средств производства
+        - Размера класса (для эксплуатируемых - потенциал восстания)
+        """
+        for class_type, social_class in self.classes.classes.items():
+            if class_type in class_wealth and class_wealth[class_type]:
+                # Среднее богатство
+                social_class.avg_wealth = sum(class_wealth[class_type]) / len(class_wealth[class_type])
+
+                # Средняя собственность
+                if class_type in class_property:
+                    social_class.avg_property = sum(class_property[class_type]) / len(class_property[class_type])
+
+                # Политическая власть
+                # Эксплуататоры: власть от богатства и собственности
+                if class_type.is_exploiter:
+                    wealth_power = min(1.0, social_class.avg_wealth / 100)
+                    property_power = min(1.0, social_class.avg_property / 5)
+                    social_class.political_power = (wealth_power + property_power) / 2
+                # Эксплуатируемые: власть от численности и сознания
+                elif class_type.is_exploited:
+                    size_power = min(0.5, social_class.get_size() / 20)
+                    consciousness_power = social_class.class_consciousness * 0.5
+                    social_class.political_power = size_power + consciousness_power
+                else:
+                    # Общинники и прочие
+                    social_class.political_power = 0.3
 
     def _process_new_year(self) -> List[str]:
         """Обрабатывает начало нового года"""
@@ -1133,6 +1199,15 @@ class Simulation:
                 my_beliefs = self.beliefs.npc_beliefs.get(npc.id, set())
                 for belief_id in my_beliefs:
                     self.beliefs.spread_belief(belief_id, npc.id, other.id)
+
+                # Распространение классового сознания (если классы возникли)
+                if self.classes.classes_emerged:
+                    self.classes.spread_consciousness(
+                        npc.id,
+                        other.id,
+                        belief_system=self.beliefs,
+                        relationship_strength=0.5  # Можно улучшить с системой отношений
+                    )
 
                 # Попытка торговли собственностью
                 trade_event = self._try_property_trade(npc, other)
