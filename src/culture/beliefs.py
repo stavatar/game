@@ -198,14 +198,14 @@ class BeliefSystem:
         return None
 
     def spread_belief(self, belief_id: str, from_npc: str, to_npc: str,
-                      influence: float = 0.1) -> bool:
+                      influence: float = 0.1, to_npc_class: Optional[str] = None) -> bool:
         """
         Распространяет верование от одного NPC к другому.
 
         Вероятность принятия зависит от:
         - Влияния источника
         - Совместимости с существующими верованиями
-        - Классовых интересов
+        - Классовых интересов (верования, выгодные классу, принимаются легче)
         """
         if belief_id not in self.beliefs:
             return False
@@ -224,6 +224,18 @@ class BeliefSystem:
         for compat_id in belief.compatible_with:
             if compat_id in npc_beliefs:
                 influence *= 1.5  # Легче принять совместимое
+
+        # === Классовые интересы ===
+        # Верования, соответствующие интересам класса, принимаются легче
+        # Верования, противоречащие интересам класса, принимаются сложнее
+        if to_npc_class:
+            if belief.benefits_class == to_npc_class:
+                # Верование выгодно классу NPC - принять легче
+                influence *= 2.0
+            elif belief.opposes_class == to_npc_class:
+                # Верование вредит классу NPC - сопротивление
+                influence *= 0.2
+            # Нейтральные верования (не связаны с классом NPC) - без изменений
 
         # Случайность
         if random.random() < influence:
