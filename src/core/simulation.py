@@ -286,6 +286,9 @@ class Simulation:
         self.event_bus.subscribe(EventType.PROPERTY_TRANSFERRED, self._on_property_transferred)
         self.event_bus.subscribe(EventType.PROPERTY_LOST, self._on_property_lost)
 
+        # Подписка на события верований
+        self.event_bus.subscribe(EventType.BELIEF_FORMED, self._on_belief_formed)
+
     def _on_npc_death(self, event: Event) -> None:
         """
         Обработчик события смерти NPC.
@@ -383,6 +386,27 @@ class Simulation:
 
         # Обновляем классы при изменении собственности
         self._update_npc_classes()
+
+        # Добавляем в лог событий
+        description = event.format_description()
+        if description:
+            self.event_log.append(description)
+
+    def _on_belief_formed(self, event: Event) -> None:
+        """
+        Обработчик события формирования верования.
+
+        Выполняет:
+        - Обновление доминирующей идеологии
+        - Логирование
+        """
+        belief_id = event.data.get("belief_id")
+        belief_name = event.data.get("belief_name", "")
+
+        # Обновляем доминирующую идеологию если есть классы
+        if self.classes.classes_emerged:
+            class_power = self.classes.get_class_power()
+            self.beliefs.update_dominant_ideology(class_power)
 
         # Добавляем в лог событий
         description = event.format_description()
