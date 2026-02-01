@@ -41,7 +41,7 @@ lang: ru
 ## Запуск
 
 ```bash
-python main.py
+python ./main.py
 ```
 
 ## Управление
@@ -61,7 +61,7 @@ python main.py
 ## Структура проекта
 
 ```
-src/
+./src/
 ├── npc/
 │   ├── character.py     # Класс NPC
 │   ├── personality.py   # Черты характера
