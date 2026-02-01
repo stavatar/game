@@ -1,17 +1,17 @@
 {
   "active": true,
-  "spec": "001-",
+  "spec": "002-",
   "state": "building",
   "subtasks": {
-    "completed": 6,
-    "total": 10,
+    "completed": 27,
+    "total": 33,
     "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "\u041e\u043f\u0442\u0438\u043c\u0438\u0437\u0430\u0446\u0438\u044f \u0432\u0442\u043e\u0440\u0438\u0447\u043d\u044b\u0445 \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u043e\u0432",
+    "current": "Epic/Task Decomposition",
     "id": null,
-    "total": 2
+    "total": 5
   },
   "workers": {
     "active": 0,
@@ -19,7 +19,7 @@
   },
   "session": {
     "number": 7,
-    "started_at": "2026-02-01T14:57:42.642296"
+    "started_at": "2026-02-01T21:12:22.512194"
   },
-  "last_update": "2026-02-01T15:07:27.886629"
+  "last_update": "2026-02-01T21:39:35.863895"
 }
