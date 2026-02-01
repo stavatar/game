@@ -297,13 +297,12 @@ class Simulation:
 
     def _on_npc_death(self, event: Event) -> None:
         """
-        Обработчик события смерти NPC.
+        Обработчик события смерти NPC (для внешних событий).
 
-        Выполняет:
-        - Обновление демографической статистики
-        - Передачу собственности наследникам
-        - Обновление семейных связей
-        - Логирование
+        Примечание: основная обработка смерти выполняется в handle_npc_death().
+        Этот обработчик используется для:
+        - Логирования событий смерти
+        - Обработки внешних смертей (если событие пришло не из handle_npc_death)
         """
         npc_id = event.actor_id
         if not npc_id:
@@ -313,47 +312,18 @@ class Simulation:
         if not npc:
             return
 
-        # Записываем смерть в демографию
+        # Если NPC уже мёртв, значит handle_npc_death() уже обработал смерть
+        # Просто логируем событие
+        if not npc.is_alive:
+            description = event.description or event.format_description()
+            if description and description not in self.event_log[-10:]:
+                self.event_log.append(description)
+            return
+
+        # Если NPC ещё жив, значит событие пришло извне - обрабатываем смерть
+        # (например, от внешнего источника событий)
         cause = event.data.get("cause", "unknown")
-        self.demography.record_death(event.year, cause)
-
-        # Передаём собственность наследникам
-        heir_id = self._find_heir(npc_id)
-        if heir_id:
-            inherited = self.ownership.process_inheritance(npc_id, heir_id, self.year)
-            if inherited:
-                heir = self.npcs.get(heir_id)
-                heir_name = heir.name if heir else heir_id
-                self.event_log.append(
-                    f"{heir_name} унаследовал {len(inherited)} объектов собственности от {npc.name}"
-                )
-
-                # Публикуем событие передачи собственности
-                transfer_event = Event(
-                    event_type=EventType.PROPERTY_TRANSFERRED,
-                    year=self.year,
-                    month=self.month,
-                    day=self.day,
-                    actor_id=npc_id,
-                    target_id=heir_id,
-                    data={
-                        "method": "наследство",
-                        "property_count": len(inherited),
-                    },
-                    importance=EventImportance.NOTABLE,
-                )
-                self.event_bus.publish(transfer_event)
-
-        # Обновляем семейные связи (супруг становится вдовцом)
-        if npc.spouse_id:
-            spouse = self.npcs.get(npc.spouse_id)
-            if spouse:
-                spouse.spouse_id = None
-
-        # Добавляем в лог событий
-        description = event.format_description()
-        if description:
-            self.event_log.append(description)
+        self.handle_npc_death(npc_id, cause)
 
     def _on_property_claimed(self, event: Event) -> None:
         """
@@ -653,6 +623,120 @@ class Simulation:
 
         return None
 
+    def handle_npc_death(self, npc_id: str, cause: str) -> Optional[str]:
+        """
+        Обрабатывает смерть NPC - централизованный каскад.
+
+        Выполняет полный процесс смерти:
+        1. Помечает NPC как мёртвого
+        2. Записывает смерть в демографию
+        3. Обновляет семейные связи (супруг становится вдовцом)
+        4. Обрабатывает наследование собственности
+        5. Удаляет из классовой системы
+        6. Удаляет из системы верований
+        7. Публикует событие смерти
+
+        Args:
+            npc_id: ID умершего NPC
+            cause: Причина смерти
+
+        Returns:
+            Описание события смерти или None если NPC не найден
+        """
+        npc = self.npcs.get(npc_id)
+        if not npc:
+            return None
+
+        # Если уже мёртв - ничего не делаем
+        if not npc.is_alive:
+            return None
+
+        # === 1. ПОМЕЧАЕМ КАК МЁРТВОГО ===
+        npc.is_alive = False
+
+        # === 2. ДЕМОГРАФИЯ: записываем смерть ===
+        self.demography.record_death(self.year, cause)
+
+        # === 3. СЕМЬЯ: обновляем связи ===
+        # Супруг становится вдовцом
+        if npc.spouse_id:
+            spouse = self.npcs.get(npc.spouse_id)
+            if spouse:
+                spouse.spouse_id = None
+
+        # Удаляем из семьи
+        family = self.families.get_npc_family(npc_id)
+        if family:
+            family.remove_member(npc_id)
+
+        # === 4. НАСЛЕДОВАНИЕ: передаём собственность ===
+        heir_id = self._find_heir(npc_id)
+        inheritance_log = None
+        if heir_id:
+            inherited = self.ownership.process_inheritance(npc_id, heir_id, self.year)
+            if inherited:
+                heir = self.npcs.get(heir_id)
+                heir_name = heir.name if heir else heir_id
+                inheritance_log = (
+                    f"{heir_name} унаследовал {len(inherited)} объектов "
+                    f"собственности от {npc.name}"
+                )
+                self.event_log.append(inheritance_log)
+
+                # Публикуем событие передачи собственности
+                transfer_event = Event(
+                    event_type=EventType.PROPERTY_TRANSFERRED,
+                    year=self.year,
+                    month=self.month,
+                    day=self.day,
+                    actor_id=npc_id,
+                    target_id=heir_id,
+                    data={
+                        "method": "наследство",
+                        "property_count": len(inherited),
+                    },
+                    importance=EventImportance.NOTABLE,
+                )
+                self.event_bus.publish(transfer_event)
+
+        # === 5. КЛАССЫ: удаляем из классовой системы ===
+        npc_class = self.classes.npc_class.get(npc_id)
+        if npc_class and npc_class in self.classes.classes:
+            self.classes.classes[npc_class].remove_member(npc_id)
+        # Удаляем из словаря npc_class
+        if npc_id in self.classes.npc_class:
+            del self.classes.npc_class[npc_id]
+
+        # === 6. ВЕРОВАНИЯ: удаляем из последователей ===
+        # Удаляем NPC из всех верований
+        npc_beliefs = self.beliefs.npc_beliefs.get(npc_id, set()).copy()
+        for belief_id in npc_beliefs:
+            if belief_id in self.beliefs.beliefs:
+                self.beliefs.beliefs[belief_id].adherents.discard(npc_id)
+        # Удаляем запись о верованиях NPC
+        if npc_id in self.beliefs.npc_beliefs:
+            del self.beliefs.npc_beliefs[npc_id]
+
+        # === 7. СОБЫТИЕ: публикуем смерть ===
+        death_description = f"{npc.name} умер в возрасте {npc.age} лет ({cause})"
+        death_event = Event(
+            event_type=EventType.NPC_DIED,
+            year=self.year,
+            month=self.month,
+            day=self.day,
+            actor_id=npc_id,
+            data={
+                "cause": cause,
+                "age": npc.age,
+                "name": npc.name,
+            },
+            importance=EventImportance.NOTABLE,
+            description=death_description,
+        )
+        self.event_bus.publish(death_event)
+
+        return death_description
+
     def initialize(self) -> List[str]:
         """Инициализирует мир с начальной популяцией"""
         events = []
@@ -935,8 +1019,12 @@ class Simulation:
         """
         events = []
 
-        for npc in self.npcs.values():
-            if not npc.is_alive:
+        # Собираем список NPC для обработки (чтобы избежать изменения dict во время итерации)
+        npc_ids = list(self.npcs.keys())
+
+        for npc_id in npc_ids:
+            npc = self.npcs.get(npc_id)
+            if not npc or not npc.is_alive:
                 continue
 
             # Голод нарастает каждый день
@@ -944,24 +1032,25 @@ class Simulation:
             if npc.hunger > 100:
                 npc.health -= 5
                 if npc.health <= 0:
-                    npc.is_alive = False
-                    events.append(f"{npc.name} умер от голода")
-
-                    # Публикуем событие смерти
-                    death_event = Event(
-                        event_type=EventType.NPC_DIED,
-                        year=self.year,
-                        month=self.month,
-                        day=self.day,
-                        actor_id=npc.id,
-                        data={"cause": "голод"},
-                        importance=EventImportance.NOTABLE,
-                    )
-                    self.event_bus.publish(death_event)
+                    # Используем централизованный обработчик смерти
+                    death_event = self.handle_npc_death(npc_id, "голод")
+                    if death_event:
+                        events.append(death_event)
+                    continue  # NPC мёртв, пропускаем остальную обработку
 
             # Старение (раз в год)
             if self.day == 1 and self.month == 1:
                 npc.age += 1
+
+                # Проверяем смерть от старости
+                if npc.age > 60:
+                    # Шанс смерти от старости увеличивается с возрастом
+                    death_chance = (npc.age - 60) * 0.05  # 5% за каждый год после 60
+                    if random.random() < death_chance:
+                        death_event = self.handle_npc_death(npc_id, "старость")
+                        if death_event:
+                            events.append(death_event)
+                        continue
 
             # Порча еды
             spoiled = npc.inventory.decay_all(1.0)
