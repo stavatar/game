@@ -12,6 +12,7 @@ import random
 
 from .config import Config
 from .events import EventBus, Event, EventType, EventImportance
+from .consistency import validate_state_consistency, ConsistencyLevel
 
 from ..world.map import WorldMap, Position
 from ..world.climate import ClimateSystem, Season
@@ -1430,7 +1431,57 @@ class Simulation:
         chain_events = self.update_base_superstructure_chain()
         events.extend(chain_events)
 
+        # === ПРОВЕРКА СОГЛАСОВАННОСТИ (INT-022) ===
+        # Проверяем состояние симуляции раз в год
+        consistency_events = self._check_consistency()
+        events.extend(consistency_events)
+
         return events
+
+    def _check_consistency(self) -> List[str]:
+        """
+        Проверяет согласованность состояния симуляции (INT-022).
+
+        Выполняется ежегодно для обнаружения:
+        - Рассинхронизации между системами
+        - Нарушений ссылочной целостности
+        - Дрейфа состояния
+
+        Возвращает список событий для лога.
+        """
+        events = []
+
+        # Запускаем полную проверку
+        report = validate_state_consistency(self)
+
+        # Логируем только если есть проблемы
+        if report.issues:
+            # Формируем сводку
+            events.append(f"[CONSISTENCY] {report.summary()}")
+
+            # Логируем ошибки и критические проблемы
+            for issue in report.issues:
+                if issue.level in [ConsistencyLevel.ERROR, ConsistencyLevel.CRITICAL]:
+                    events.append(f"[CONSISTENCY:{issue.level.name}] {issue.description}")
+                    self.event_log.append(issue.to_log_message())
+
+            # Предупреждения только в event_log (не перегружаем UI)
+            for issue in report.get_issues_by_level(ConsistencyLevel.WARNING):
+                self.event_log.append(issue.to_log_message())
+
+        return events
+
+    def get_consistency_report(self) -> 'ConsistencyReport':
+        """
+        Возвращает полный отчёт о согласованности состояния.
+
+        Может использоваться для:
+        - Отладки
+        - QA-тестирования
+        - Мониторинга здоровья симуляции
+        """
+        from .consistency import validate_state_consistency
+        return validate_state_consistency(self)
 
     def _process_npc_actions(self) -> List[str]:
         """Обрабатывает действия NPC"""
