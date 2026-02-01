@@ -18,7 +18,7 @@ from ..world.climate import ClimateSystem, Season
 
 from ..economy.resources import ResourceType, Resource, Inventory
 from ..economy.technology import KnowledgeSystem, TECHNOLOGIES
-from ..economy.property import OwnershipSystem, PropertyType
+from ..economy.property import OwnershipSystem, PropertyType, OwnershipTransition
 from ..economy.production import Production, PRODUCTION_METHODS
 
 from ..society.family import FamilySystem
@@ -295,7 +295,7 @@ class Simulation:
 
         Выполняет:
         - Обновление демографической статистики
-        - Освобождение собственности
+        - Передачу собственности наследникам
         - Обновление семейных связей
         - Логирование
         """
@@ -311,8 +311,32 @@ class Simulation:
         cause = event.data.get("cause", "unknown")
         self.demography.record_death(event.year, cause)
 
-        # Освобождаем собственность умершего
-        self.ownership.release_all_property(npc_id)
+        # Передаём собственность наследникам
+        heir_id = self._find_heir(npc_id)
+        if heir_id:
+            inherited = self.ownership.process_inheritance(npc_id, heir_id, self.year)
+            if inherited:
+                heir = self.npcs.get(heir_id)
+                heir_name = heir.name if heir else heir_id
+                self.event_log.append(
+                    f"{heir_name} унаследовал {len(inherited)} объектов собственности от {npc.name}"
+                )
+
+                # Публикуем событие передачи собственности
+                transfer_event = Event(
+                    event_type=EventType.PROPERTY_TRANSFERRED,
+                    year=self.year,
+                    month=self.month,
+                    day=self.day,
+                    actor_id=npc_id,
+                    target_id=heir_id,
+                    data={
+                        "method": "наследство",
+                        "property_count": len(inherited),
+                    },
+                    importance=EventImportance.NOTABLE,
+                )
+                self.event_bus.publish(transfer_event)
 
         # Обновляем семейные связи (супруг становится вдовцом)
         if npc.spouse_id:
@@ -412,6 +436,60 @@ class Simulation:
         description = event.format_description()
         if description:
             self.event_log.append(description)
+
+    def _find_heir(self, deceased_id: str) -> Optional[str]:
+        """
+        Находит наследника для умершего NPC.
+
+        Порядок приоритета:
+        1. Супруг (если жив)
+        2. Дети (старший живой ребёнок)
+        3. Братья/сёстры
+        4. Другие члены семьи
+
+        Возвращает id наследника или None.
+        """
+        deceased = self.npcs.get(deceased_id)
+        if not deceased:
+            return None
+
+        # 1. Супруг
+        spouse_id = self.families.get_spouse(deceased_id)
+        if spouse_id:
+            spouse = self.npcs.get(spouse_id)
+            if spouse and spouse.is_alive:
+                return spouse_id
+
+        # 2. Дети (старший живой)
+        children = self.families.get_children(deceased_id)
+        living_children = []
+        for child_id in children:
+            child = self.npcs.get(child_id)
+            if child and child.is_alive:
+                living_children.append((child_id, child.age))
+
+        if living_children:
+            # Сортируем по возрасту (старший первый)
+            living_children.sort(key=lambda x: x[1], reverse=True)
+            return living_children[0][0]
+
+        # 3. Братья/сёстры
+        siblings = self.families.get_siblings(deceased_id)
+        for sibling_id in siblings:
+            sibling = self.npcs.get(sibling_id)
+            if sibling and sibling.is_alive:
+                return sibling_id
+
+        # 4. Любой член семьи
+        family = self.families.get_npc_family(deceased_id)
+        if family:
+            for member_id in family.members:
+                if member_id != deceased_id:
+                    member = self.npcs.get(member_id)
+                    if member and member.is_alive:
+                        return member_id
+
+        return None
 
     def initialize(self) -> List[str]:
         """Инициализирует мир с начальной популяцией"""
@@ -853,6 +931,124 @@ class Simulation:
 
         return None
 
+    def _try_property_trade(self, npc1: SimulationNPC, npc2: SimulationNPC) -> Optional[str]:
+        """
+        Пытается совершить торговую сделку собственностью между NPC.
+
+        Условия для торговли:
+        - Частная собственность уже возникла
+        - У одного из NPC есть передаваемая собственность
+        - Есть взаимная выгода (один имеет излишек собственности, другой - ресурсы)
+
+        Возвращает описание события или None.
+        """
+        # Торговля возможна только после возникновения частной собственности
+        if not self.ownership.private_property_emerged:
+            return None
+
+        # Базовая вероятность торговли
+        base_chance = 0.005  # 0.5% за тик социализации
+
+        # Торговые навыки увеличивают шанс
+        trade_skill_1 = npc1.get_skill("trading")
+        trade_skill_2 = npc2.get_skill("trading")
+        avg_skill = (trade_skill_1 + trade_skill_2) / 2.0
+        base_chance *= (1 + avg_skill / 50)
+
+        # Жадные NPC чаще торгуют
+        if "greedy" in npc1.traits or "greedy" in npc2.traits:
+            base_chance *= 1.5
+
+        # Проверяем шанс
+        if random.random() > base_chance:
+            return None
+
+        # Получаем собственность обоих NPC
+        props1 = self.ownership.get_owner_properties(npc1.id)
+        props2 = self.ownership.get_owner_properties(npc2.id)
+
+        # Фильтруем только передаваемую собственность
+        tradeable1 = [p for p in props1 if p.can_transfer]
+        tradeable2 = [p for p in props2 if p.can_transfer]
+
+        # Нужна собственность хотя бы у одного
+        if not tradeable1 and not tradeable2:
+            return None
+
+        # Определяем продавца и покупателя
+        # Продавец: тот у кого больше собственности (излишек)
+        # Покупатель: тот у кого больше ресурсов
+        seller, buyer, seller_props = None, None, None
+
+        if len(tradeable1) > len(tradeable2):
+            seller, buyer = npc1, npc2
+            seller_props = tradeable1
+        elif len(tradeable2) > len(tradeable1):
+            seller, buyer = npc2, npc1
+            seller_props = tradeable2
+        else:
+            # Равное количество - выбираем случайно
+            if tradeable1 and random.random() < 0.5:
+                seller, buyer = npc1, npc2
+                seller_props = tradeable1
+            elif tradeable2:
+                seller, buyer = npc2, npc1
+                seller_props = tradeable2
+            else:
+                return None
+
+        if not seller_props:
+            return None
+
+        # Покупатель должен иметь ресурсы для обмена
+        buyer_resources = buyer.inventory.total_value()
+        if buyer_resources < 5.0:  # Минимальная стоимость для торговли
+            return None
+
+        # Выбираем случайную собственность для обмена
+        prop_to_trade = random.choice(seller_props)
+
+        # Совершаем обмен
+        success = self.ownership.transfer_property(
+            property_id=prop_to_trade.property_id,
+            new_owner_id=buyer.id,
+            year=self.year,
+            method=OwnershipTransition.TRADE
+        )
+
+        if success:
+            # Покупатель отдаёт ресурсы (упрощённо - часть еды)
+            trade_cost = min(5.0, buyer_resources * 0.3)
+            buyer.inventory.remove(ResourceType.BERRIES, trade_cost)
+
+            # Продавец получает "оплату" (добавляем к счастью и навыку)
+            seller.set_skill("trading", seller.get_skill("trading") + 1)
+            buyer.set_skill("trading", buyer.get_skill("trading") + 1)
+
+            # Публикуем событие
+            trade_event = Event(
+                event_type=EventType.PROPERTY_TRANSFERRED,
+                year=self.year,
+                month=self.month,
+                day=self.day,
+                actor_id=seller.id,
+                target_id=buyer.id,
+                data={
+                    "property_id": prop_to_trade.property_id,
+                    "category": prop_to_trade.category.value,
+                    "method": "обмен",
+                },
+                importance=EventImportance.MINOR,
+            )
+            self.event_bus.publish(trade_event)
+
+            return (
+                f"{seller.name} продал {prop_to_trade.category.value} "
+                f"({prop_to_trade.property_id}) {buyer.name}"
+            )
+
+        return None
+
     def _execute_action(self, npc: SimulationNPC, action: str) -> List[str]:
         """Выполняет действие NPC"""
         events = []
@@ -937,6 +1133,11 @@ class Simulation:
                 my_beliefs = self.beliefs.npc_beliefs.get(npc.id, set())
                 for belief_id in my_beliefs:
                     self.beliefs.spread_belief(belief_id, npc.id, other.id)
+
+                # Попытка торговли собственностью
+                trade_event = self._try_property_trade(npc, other)
+                if trade_event:
+                    events.append(trade_event)
 
         return events
 
