@@ -275,6 +275,68 @@ class Production:
     # Бонусы от технологий
     tech_bonuses: Dict[str, float] = field(default_factory=dict)
 
+    # Статистика производства
+    total_production_hours: float = 0.0
+    total_resources_produced: Dict[str, float] = field(default_factory=dict)
+    total_resources_consumed: Dict[str, float] = field(default_factory=dict)
+
+    # Текущий сезон (устанавливается симуляцией)
+    current_season: str = ""
+
+    def update(self, delta_hours: float = 1.0) -> List[str]:
+        """
+        Обновляет систему производства.
+
+        Вызывается из главного цикла симуляции.
+        Обрабатывает глобальные производственные процессы.
+
+        Args:
+            delta_hours: Количество часов с последнего обновления
+
+        Returns:
+            Список событий производства
+        """
+        events = []
+
+        # Учитываем время производства
+        self.total_production_hours += delta_hours
+
+        return events
+
+    def record_production(self, result: 'ProductionResult') -> None:
+        """
+        Записывает результат производства в статистику.
+
+        Args:
+            result: Результат производства
+        """
+        if not result.success:
+            return
+
+        for resource, amount in result.resources_produced.items():
+            self.total_resources_produced[resource] = (
+                self.total_resources_produced.get(resource, 0.0) + amount
+            )
+
+        for resource, amount in result.resources_consumed.items():
+            self.total_resources_consumed[resource] = (
+                self.total_resources_consumed.get(resource, 0.0) + amount
+            )
+
+    def get_statistics(self) -> Dict:
+        """
+        Возвращает статистику производства.
+
+        Returns:
+            Словарь со статистикой
+        """
+        return {
+            "total_hours": self.total_production_hours,
+            "produced": dict(self.total_resources_produced),
+            "consumed": dict(self.total_resources_consumed),
+            "tech_bonuses": dict(self.tech_bonuses),
+        }
+
     def calculate_productivity(self,
                                method: ProductionMethod,
                                worker_skill: int = 0,

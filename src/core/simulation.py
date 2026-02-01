@@ -563,7 +563,12 @@ class Simulation:
                         year_events = self._process_new_year()
                         all_events.extend(year_events)
 
-            # === 2. NPC действия (каждый час) ===
+            # === 2. БАЗИС: Производство (каждый час) ===
+            self.production.current_season = self.climate.current_season.value
+            production_events = self.production.update(1.0)
+            all_events.extend(production_events)
+
+            # === 3. NPC действия (каждый час) ===
             npc_events = self._process_npc_actions()
             all_events.extend(npc_events)
 
