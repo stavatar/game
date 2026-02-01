@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Optional, TYPE_CHECKING
 from enum import Enum
 
 if TYPE_CHECKING:
-    from ..core.simulation import Simulation, NPCState
+    from ..core.simulation import Simulation, SimulationNPC
     from ..core.config import Config
     from ..world.map import WorldMap, Position
     from ..society.classes import ClassSystem, SocialClass, ClassConflict
@@ -72,7 +72,7 @@ class NPCSerializer(BaseSerializer):
     """Сериализатор NPC"""
 
     @staticmethod
-    def serialize(npc: 'NPCState') -> Dict[str, Any]:
+    def serialize(npc: 'SimulationNPC') -> Dict[str, Any]:
         """Сериализует NPC"""
         return {
             "id": npc.id,
@@ -85,7 +85,7 @@ class NPCSerializer(BaseSerializer):
             "hunger": npc.hunger,
             "energy": npc.energy,
             "happiness": npc.happiness,
-            "skills": npc.skills,
+            "skills": npc.skill_dict,  # Use skill_dict property for legacy skills
             "traits": npc.traits,
             "intelligence": npc.intelligence,
             "family_id": npc.family_id,
@@ -115,34 +115,46 @@ class NPCSerializer(BaseSerializer):
         }
 
     @staticmethod
-    def deserialize(data: Dict[str, Any]) -> 'NPCState':
+    def deserialize(data: Dict[str, Any]) -> 'SimulationNPC':
         """Десериализует NPC"""
-        from ..core.simulation import NPCState
+        from ..core.simulation import SimulationNPC
         from ..world.map import Position
         from ..economy.resources import Inventory, Resource, ResourceType
+        from ..npc.character import Gender, Stats
 
         # Позиция
         pos_data = data.get("position", {"x": 25, "y": 25})
         position = Position(x=pos_data["x"], y=pos_data["y"])
 
+        # Определяем пол
+        is_female = data.get("is_female", False)
+        gender = Gender.FEMALE if is_female else Gender.MALE
+
         # NPC
-        npc = NPCState(
+        npc = SimulationNPC(
             id=data["id"],
             name=data["name"],
             age=data["age"],
-            is_female=data["is_female"],
+            gender=gender,
             is_alive=data.get("is_alive", True),
             position=position,
             health=data.get("health", 100.0),
-            hunger=data.get("hunger", 0.0),
-            energy=data.get("energy", 100.0),
-            happiness=data.get("happiness", 50.0),
-            skills=data.get("skills", {}),
-            traits=data.get("traits", []),
-            intelligence=data.get("intelligence", 10),
+            stats=Stats(intelligence=data.get("intelligence", 10)),
             family_id=data.get("family_id"),
             spouse_id=data.get("spouse_id"),
         )
+
+        # Устанавливаем hunger (инвертируется внутри через setter)
+        npc.hunger = data.get("hunger", 0.0)
+
+        # Устанавливаем energy
+        npc.energy = data.get("energy", 100.0)
+
+        # Устанавливаем навыки
+        npc._skill_dict = data.get("skills", {})
+
+        # Устанавливаем легаси черты
+        npc._legacy_traits = data.get("traits", [])
 
         # Инвентарь
         inv_data = data.get("inventory", {})

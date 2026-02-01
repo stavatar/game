@@ -44,7 +44,7 @@ class SimulationNPC(NPC):
     - inventory: Инвентарь из экономической системы
     - family_id, spouse_id: Прямые ссылки на семью
 
-    Также добавляет свойства совместимости для перехода с NPCState:
+    Также предоставляет свойства для удобства:
     - is_female, x, y, hunger, energy, happiness
     """
 
@@ -73,7 +73,7 @@ class SimulationNPC(NPC):
         if self.inventory is None:
             self.inventory = Inventory(owner_id=self.id)
 
-    # === Свойства совместимости с NPCState ===
+    # === Свойства для удобства доступа ===
 
     @property
     def is_female(self) -> bool:
@@ -143,7 +143,7 @@ class SimulationNPC(NPC):
         """Интеллект из Stats"""
         return self.stats.intelligence
 
-    # === Методы совместимости с NPCState ===
+    # === Методы для логики симуляции ===
 
     def is_adult(self) -> bool:
         """Является ли взрослым (16+ лет)"""
@@ -187,60 +187,6 @@ class SimulationNPC(NPC):
     def skill_dict(self) -> Dict[str, int]:
         """Возвращает словарь навыков для совместимости"""
         return self._skill_dict
-
-
-# Legacy NPCState - сохраняем для обратной совместимости до subtask-0-3
-@dataclass
-class NPCState:
-    """Состояние NPC в симуляции"""
-    id: str
-    name: str
-    age: int
-    is_female: bool
-    is_alive: bool = True
-
-    # Позиция
-    position: Position = field(default_factory=lambda: Position(25, 25))
-
-    # Ресурсы
-    inventory: Inventory = None
-
-    # Характеристики
-    health: float = 100.0
-    hunger: float = 0.0
-    energy: float = 100.0
-    happiness: float = 50.0
-
-    # Навыки (0-100)
-    skills: Dict[str, int] = field(default_factory=dict)
-
-    # Личность
-    traits: List[str] = field(default_factory=list)
-    intelligence: int = 10
-
-    # Социальное
-    family_id: Optional[str] = None
-    spouse_id: Optional[str] = None
-
-    def __post_init__(self):
-        if self.inventory is None:
-            self.inventory = Inventory(owner_id=self.id)
-
-    def is_adult(self) -> bool:
-        return self.age >= 16
-
-    def can_work(self) -> bool:
-        return self.is_alive and self.is_adult() and self.health > 20
-
-    @property
-    def x(self) -> float:
-        """Координата X для UI"""
-        return self.position.x
-
-    @property
-    def y(self) -> float:
-        """Координата Y для UI"""
-        return self.position.y
 
 
 class Simulation:
