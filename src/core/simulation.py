@@ -13,6 +13,7 @@ import random
 from .config import Config
 from .events import EventBus, Event, EventType, EventImportance
 from .consistency import validate_state_consistency, ConsistencyLevel
+from .emergence import EmergenceTracker, EmergenceMetrics
 
 from ..world.map import WorldMap, Position
 from ..world.climate import ClimateSystem, Season
@@ -237,6 +238,9 @@ class Simulation:
         # События
         self.event_bus = EventBus()
         self.event_log: List[str] = []
+
+        # Трекер эмерджентности (INT-040)
+        self.emergence_tracker = EmergenceTracker()
 
         # Подписываемся на события
         self._setup_event_subscribers()
@@ -1437,6 +1441,11 @@ class Simulation:
         chain_events = self.update_base_superstructure_chain()
         events.extend(chain_events)
 
+        # === ОТСЛЕЖИВАНИЕ ЭМЕРДЖЕНТНОСТИ (INT-040) ===
+        # Проверяем и регистрируем новые эмержентные явления
+        emergence_events = self._track_emergence()
+        events.extend(emergence_events)
+
         # === ПРОВЕРКА СОГЛАСОВАННОСТИ (INT-022) ===
         # Проверяем состояние симуляции раз в год
         consistency_events = self._check_consistency()
@@ -1488,6 +1497,59 @@ class Simulation:
         """
         from .consistency import validate_state_consistency
         return validate_state_consistency(self)
+
+    def _track_emergence(self) -> List[str]:
+        """
+        Отслеживает эмержентные явления в симуляции (INT-040).
+
+        Выполняется ежегодно для обнаружения:
+        - Новых эмержентных свойств
+        - Изменений стадии развития
+        - Качественных переходов
+
+        Возвращает список событий для лога.
+        """
+        events = []
+
+        # Обновляем трекер и получаем новые события
+        new_emergences = self.emergence_tracker.update(self)
+
+        # Формируем сообщения о новых эмержентных явлениях
+        for emergence in new_emergences:
+            event_msg = f"[EMERGENCE] {emergence.get_summary()}"
+            events.append(event_msg)
+
+        # Каждые 10 лет выводим сводку стадии развития
+        if self.year % 10 == 0:
+            metrics = self.emergence_tracker.get_metrics()
+            events.append(
+                f"[EMERGENCE] Стадия развития: {metrics.development_stage.russian_name} "
+                f"(уровень: {metrics.development_level:.0%})"
+            )
+
+        return events
+
+    def get_emergence_metrics(self) -> EmergenceMetrics:
+        """
+        Возвращает метрики эмерджентности.
+
+        Может использоваться для:
+        - Анализа развития общества
+        - Сравнения разных запусков симуляции
+        - Мониторинга прогресса
+        """
+        return self.emergence_tracker.get_metrics()
+
+    def get_emergence_report(self) -> str:
+        """
+        Возвращает текстовый отчёт о развитии общества.
+
+        Включает:
+        - Текущую стадию развития
+        - Ключевые метрики
+        - Хронологию событий
+        """
+        return self.emergence_tracker.get_development_report()
 
     def _get_npc_terrain_info(self, npc: SimulationNPC) -> dict:
         """
