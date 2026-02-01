@@ -638,26 +638,32 @@ class Simulation:
         """
         Обновляет симуляцию на указанное количество часов.
 
-        Порядок обновления важен:
-        1. Время и климат
-        2. БАЗИС (экономика)
-        3. NPC действия
-        4. НАДСТРОЙКА (культура)
-        5. Демография
+        Порядок обновления по марксистской архитектуре:
+        1. Время и климат (окружающая среда)
+        2. БАЗИС (экономика): производство, собственность, классы
+        3. NPC действия (агенты реагируют на среду и базис)
+        4. НАДСТРОЙКА (культура): верования, традиции, нормы
+        5. Демография (рождения/смерти, потребности)
+
+        По Марксу: базис определяет надстройку, поэтому экономика
+        обновляется ДО культуры. NPC действуют в рамках экономической
+        структуры, а культурные изменения следуют за их действиями.
         """
         all_events = []
 
         for _ in range(hours):
-            # === 1. Время ===
+            # ================================================================
+            # === 1. ВРЕМЯ И КЛИМАТ (окружающая среда) ===
+            # ================================================================
             self.hour += 1
+            is_new_day = False
+            is_new_year = False
+
             if self.hour >= 24:
                 self.hour = 0
                 self.day += 1
                 self.total_days += 1
-
-                # Новый день
-                day_events = self._process_new_day()
-                all_events.extend(day_events)
+                is_new_day = True
 
                 if self.day > self.config.days_per_month:
                     self.day = 1
@@ -666,17 +672,51 @@ class Simulation:
                     if self.month > self.config.months_per_year:
                         self.month = 1
                         self.year += 1
-                        year_events = self._process_new_year()
-                        all_events.extend(year_events)
+                        is_new_year = True
 
-            # === 2. БАЗИС: Производство (каждый час) ===
+            # Обновляем климат (раз в день)
+            if is_new_day:
+                climate_events = self._update_climate()
+                all_events.extend(climate_events)
+
+            # ================================================================
+            # === 2. БАЗИС (экономика) - обновляется ПЕРЕД надстройкой ===
+            # ================================================================
+
+            # Производство (каждый час)
             self.production.current_season = self.climate.current_season.value
             production_events = self.production.update(1.0)
             all_events.extend(production_events)
 
-            # === 3. NPC действия (каждый час) ===
+            # Классовые конфликты и отношения (раз в день)
+            if is_new_day:
+                conflict_events = self._process_class_conflicts()
+                all_events.extend(conflict_events)
+
+            # ================================================================
+            # === 3. NPC ДЕЙСТВИЯ (каждый час) ===
+            # ================================================================
             npc_events = self._process_npc_actions()
             all_events.extend(npc_events)
+
+            # ================================================================
+            # === 4. НАДСТРОЙКА (культура) - ПОСЛЕ действий NPC ===
+            # ================================================================
+            if is_new_day:
+                superstructure_events = self._update_superstructure()
+                all_events.extend(superstructure_events)
+
+            # ================================================================
+            # === 5. ДЕМОГРАФИЯ (потребности, рождения, смерти) ===
+            # ================================================================
+            if is_new_day:
+                demography_events = self._update_demography()
+                all_events.extend(demography_events)
+
+            # Обработка нового года (после всех дневных обновлений)
+            if is_new_year:
+                year_events = self._process_new_year()
+                all_events.extend(year_events)
 
         # Ограничиваем лог
         self.event_log.extend(all_events)
@@ -685,11 +725,15 @@ class Simulation:
 
         return all_events
 
-    def _process_new_day(self) -> List[str]:
-        """Обрабатывает начало нового дня"""
+    def _update_climate(self) -> List[str]:
+        """
+        Обновляет климат и погоду (шаг 1).
+
+        Часть окружающей среды, обновляется первой.
+        """
         events = []
 
-        # Климат
+        # Обновляем климат
         day_of_year = (self.month - 1) * self.config.days_per_month + self.day
         climate_events = self.climate.update(day_of_year, self.year)
         events.extend(climate_events)
@@ -705,25 +749,17 @@ class Simulation:
                         f"усилил классовое сознание (+{consciousness_boost:.0%})"
                     )
 
-        # Потребности NPC
-        for npc in self.npcs.values():
-            if not npc.is_alive:
-                continue
+        return events
 
-            # Голод
-            npc.hunger += 10
-            if npc.hunger > 100:
-                npc.health -= 5
-                if npc.health <= 0:
-                    npc.is_alive = False
-                    events.append(f"{npc.name} умер от голода")
+    def _update_superstructure(self) -> List[str]:
+        """
+        Обновляет надстройку: верования, традиции, нормы (шаг 4).
 
-            # Старение (раз в год симулируется здесь для упрощения)
-            if self.day == 1 and self.month == 1:
-                npc.age += 1
-
-            # Порча еды
-            spoiled = npc.inventory.decay_all(1.0)
+        По Марксу: надстройка отражает и легитимизирует базис.
+        Обновляется ПОСЛЕ действий NPC, чтобы отразить изменения
+        в экономических отношениях.
+        """
+        events = []
 
         # === ТРАДИЦИИ: проверяем сезонные праздники ===
         celebration_event = self._check_season_celebration()
@@ -733,7 +769,7 @@ class Simulation:
         # === ТРАДИЦИИ: применяем эффекты существующих традиций ===
         self._apply_tradition_effects()
 
-        # Проверяем возникновение верований
+        # === ВЕРОВАНИЯ: проверяем возникновение новых ===
         economic_conditions = {
             "gathering_activity": sum(1 for n in self.npcs.values() if n.can_work()),
             "private_property_exists": self.ownership.private_property_emerged,
@@ -750,9 +786,47 @@ class Simulation:
         if new_belief:
             events.append(f"Возникло верование: {new_belief.name}")
 
-        # === КЛАССОВЫЕ КОНФЛИКТЫ ===
-        conflict_events = self._process_class_conflicts()
-        events.extend(conflict_events)
+        return events
+
+    def _update_demography(self) -> List[str]:
+        """
+        Обновляет демографию: потребности NPC, старение, смерти (шаг 5).
+
+        Обновляется последней, после всех экономических и культурных
+        изменений за день.
+        """
+        events = []
+
+        for npc in self.npcs.values():
+            if not npc.is_alive:
+                continue
+
+            # Голод нарастает каждый день
+            npc.hunger += 10
+            if npc.hunger > 100:
+                npc.health -= 5
+                if npc.health <= 0:
+                    npc.is_alive = False
+                    events.append(f"{npc.name} умер от голода")
+
+                    # Публикуем событие смерти
+                    death_event = Event(
+                        event_type=EventType.NPC_DIED,
+                        year=self.year,
+                        month=self.month,
+                        day=self.day,
+                        actor_id=npc.id,
+                        data={"cause": "голод"},
+                        importance=EventImportance.NOTABLE,
+                    )
+                    self.event_bus.publish(death_event)
+
+            # Старение (раз в год)
+            if self.day == 1 and self.month == 1:
+                npc.age += 1
+
+            # Порча еды
+            spoiled = npc.inventory.decay_all(1.0)
 
         return events
 
