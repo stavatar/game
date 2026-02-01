@@ -779,6 +779,9 @@ class Simulation:
             if random.random() < 0.3:
                 self.knowledge.add_knowledge(npc.id, "stone_knapping")
 
+        # Technology -> Production: инициализируем бонусы производства на основе начальных знаний
+        self.production.update_tech_bonuses(self.knowledge.discovered_technologies)
+
         # Начальные верования - сначала создаем базовое верование анимизм
         # (возникает естественно при взаимодействии с природой)
         economic_conditions = self._get_economic_conditions()
@@ -1963,6 +1966,10 @@ class Simulation:
             )
             amount *= terrain_mod
 
+            # Technology -> Production: бонус от известных технологий
+            tech_bonus = self.production.get_activity_tech_bonus("gathering")
+            amount *= (1.0 + tech_bonus)
+
             # Верования влияют на собирательство:
             # respect_nature дает бонус (духи благоволят)
             # work_ethic дает бонус к эффективности
@@ -1996,6 +2003,8 @@ class Simulation:
                 )
                 if discovery:
                     events.append(f"{npc.name} открыл: {discovery.name}!")
+                    # Technology -> Production: обновляем бонусы производства
+                    self.production.update_tech_bonuses(self.knowledge.discovered_technologies)
 
                 # Попытка захватить землю при накоплении излишка (INT-002)
                 # theft_mod отрицательный = меньше склонность к захвату
@@ -2017,15 +2026,21 @@ class Simulation:
                 terrain_name, LaborType.HUNTING, terrain_fertility
             )
 
+            # Technology -> Production: бонус от известных технологий (basic_hunting, bow_arrow и др.)
+            hunting_tech_bonus = self.production.get_activity_tech_bonus("hunting")
+
             # work_ethic повышает шанс успешной охоты
+            # Technology -> Production: tech bonus также повышает шанс успеха
             success_chance = (0.3 + skill / 200 + work_ethic_mod * 0.1) * hunting_climate_mod * terrain_mod
+            success_chance *= (1.0 + hunting_tech_bonus * 0.5)  # Технологии повышают шанс успеха
             success = random.random() < success_chance
 
             if success:
                 amount = 2 + skill / 30
                 # work_ethic дает бонус к добыче
-                # Climate -> Production + Territory -> Economics
+                # Climate -> Production + Territory -> Economics + Technology -> Production
                 amount *= (1.0 + work_ethic_mod * 0.15) * hunting_climate_mod * terrain_mod
+                amount *= (1.0 + hunting_tech_bonus)  # Технологии увеличивают добычу
                 npc.inventory.add(Resource(ResourceType.MEAT, quantity=amount))
                 npc.set_skill("hunting", skill + 1)
                 events.append(f"{npc.name} добыл дичь")
@@ -2034,6 +2049,15 @@ class Simulation:
                 tradition_event = self._record_practice_success("hunting")
                 if tradition_event:
                     events.append(tradition_event)
+
+                # Technology -> Production: шанс открыть технологию через охоту
+                discovery = self.knowledge.try_discovery(
+                    npc.id, "hunting", npc.intelligence, self.year
+                )
+                if discovery:
+                    events.append(f"{npc.name} открыл: {discovery.name}!")
+                    # Technology -> Production: обновляем бонусы производства
+                    self.production.update_tech_bonuses(self.knowledge.discovered_technologies)
 
                 # Попытка захватить землю при накоплении излишка (INT-002)
                 # theft_mod влияет на склонность к захвату
@@ -2062,14 +2086,20 @@ class Simulation:
                 terrain_name, LaborType.FISHING, terrain_fertility
             )
 
+            # Technology -> Production: бонус от технологии рыболовства
+            fishing_tech_bonus = self.production.get_activity_tech_bonus("fishing")
+
             # work_ethic повышает шанс успешной рыбалки
+            # Technology -> Production: tech bonus также повышает шанс успеха
             success_chance = (0.4 + skill / 200 + work_ethic_mod * 0.1) * fishing_climate_mod * terrain_mod
+            success_chance *= (1.0 + fishing_tech_bonus * 0.5)  # Технологии повышают шанс успеха
             success = random.random() < success_chance
 
             if success:
                 amount = 2 + skill / 40
-                # Climate + Territory modifiers
+                # Climate + Territory + Technology modifiers
                 amount *= fishing_climate_mod * terrain_mod * (1.0 + work_ethic_mod * 0.15)
+                amount *= (1.0 + fishing_tech_bonus)  # Технологии увеличивают улов
                 npc.inventory.add(Resource(ResourceType.FISH, quantity=amount))
                 npc.set_skill("fishing", skill + 1)
                 events.append(f"{npc.name} поймал рыбу")
@@ -2078,6 +2108,15 @@ class Simulation:
                 tradition_event = self._record_practice_success("fishing")
                 if tradition_event:
                     events.append(tradition_event)
+
+                # Technology -> Production: шанс открыть технологию через рыболовство
+                discovery = self.knowledge.try_discovery(
+                    npc.id, "fishing", npc.intelligence, self.year
+                )
+                if discovery:
+                    events.append(f"{npc.name} открыл: {discovery.name}!")
+                    # Technology -> Production: обновляем бонусы производства
+                    self.production.update_tech_bonuses(self.knowledge.discovered_technologies)
 
             npc.energy -= 15
             npc.hunger += 7
@@ -2100,6 +2139,7 @@ class Simulation:
                 tradition_mod = self.beliefs.get_behavior_modifier(npc.id, "tradition")
 
                 my_knowledge = self.knowledge.get_npc_knowledge(npc.id)
+                knowledge_transferred = False
                 for tech_id in my_knowledge:
                     teaching_skill = npc.get_skill("teaching") or 25  # Default if not set
                     # Верования влияют на эффективность передачи знаний
@@ -2110,6 +2150,11 @@ class Simulation:
                             other.intelligence
                     ):
                         events.append(f"{npc.name} научил {other.name}: {tech_id}")
+                        knowledge_transferred = True
+
+                # Technology -> Production: обновляем бонусы если знания были переданы
+                if knowledge_transferred:
+                    self.production.update_tech_bonuses(self.knowledge.discovered_technologies)
 
                 # Распространение верований
                 my_beliefs = self.beliefs.npc_beliefs.get(npc.id, set())

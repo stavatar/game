@@ -826,3 +826,133 @@ class Production:
             return 0.0
 
         return surplus / total_produced
+
+    # ===================================================================
+    # Technology -> Production Link
+    # ===================================================================
+
+    def update_tech_bonuses(self, known_technologies: set) -> None:
+        """
+        Technology -> Production Link:
+        Обновляет бонусы производства на основе известных технологий.
+
+        Агрегирует production_bonus из всех известных технологий
+        в self.tech_bonuses для использования в calculate_productivity().
+
+        Вызывается симуляцией при изменении списка технологий.
+
+        Args:
+            known_technologies: Множество ID известных технологий
+        """
+        # Импортируем здесь, чтобы избежать циклических импортов
+        from .technology import TECHNOLOGIES
+
+        # Сбрасываем бонусы
+        self.tech_bonuses.clear()
+
+        # Собираем бонусы от всех известных технологий
+        for tech_id in known_technologies:
+            tech = TECHNOLOGIES.get(tech_id)
+            if tech and tech.production_bonus:
+                for bonus_type, bonus_value in tech.production_bonus.items():
+                    current = self.tech_bonuses.get(bonus_type, 0.0)
+                    self.tech_bonuses[bonus_type] = current + bonus_value
+
+    def get_labor_tech_bonus(self, labor_type: LaborType) -> float:
+        """
+        Technology -> Production Link:
+        Возвращает суммарный технологический бонус для типа труда.
+
+        Маппит LaborType на категории бонусов из technology.production_bonus
+        и возвращает агрегированный бонус.
+
+        Args:
+            labor_type: Тип труда
+
+        Returns:
+            Множитель бонуса (0.0 = нет бонуса, 0.5 = +50% к производительности)
+        """
+        # Маппинг типов труда на категории бонусов в технологиях
+        labor_to_bonus_category = {
+            LaborType.GATHERING: "gathering",
+            LaborType.HUNTING: "hunting",
+            LaborType.FISHING: "fishing",
+            LaborType.FARMING: "farming",
+            LaborType.HERDING: "herding",
+            LaborType.CRAFTING: "smithing",  # Ремесло использует smithing бонус
+            LaborType.BUILDING: "shelter",   # Строительство использует shelter бонус
+            LaborType.COOKING: "cooking",
+            LaborType.MINING: "mining",
+        }
+
+        category = labor_to_bonus_category.get(labor_type)
+        if category is None:
+            return 0.0
+
+        # Возвращаем бонус для этой категории
+        return self.tech_bonuses.get(category, 0.0)
+
+    def get_activity_tech_bonus(self, activity_name: str) -> float:
+        """
+        Technology -> Production Link:
+        Возвращает технологический бонус для названия активности.
+
+        Удобный метод для симуляции, где активности именуются строками
+        (gather, hunt, fish, etc.)
+
+        Args:
+            activity_name: Название активности (gather, hunt, fish, farm, etc.)
+
+        Returns:
+            Множитель бонуса (0.0 = нет бонуса, 0.5 = +50%)
+        """
+        # Маппинг названий активностей на категории бонусов
+        activity_to_bonus = {
+            "gather": "gathering",
+            "gathering": "gathering",
+            "gather_food": "gathering",
+            "hunt": "hunting",
+            "hunting": "hunting",
+            "fish": "fishing",
+            "fishing": "fishing",
+            "farm": "farming",
+            "farming": "farming",
+            "herd": "herding",
+            "herding": "herding",
+            "craft": "smithing",
+            "crafting": "smithing",
+            "build": "shelter",
+            "building": "shelter",
+            "cook": "cooking",
+            "cooking": "cooking",
+            "mine": "mining",
+            "mining": "mining",
+        }
+
+        category = activity_to_bonus.get(activity_name.lower())
+        if category is None:
+            # Проверяем, есть ли прямой бонус с таким именем
+            return self.tech_bonuses.get(activity_name.lower(), 0.0)
+
+        return self.tech_bonuses.get(category, 0.0)
+
+    def has_required_tech(self, method_id: str, known_technologies: set) -> bool:
+        """
+        Technology -> Production Link:
+        Проверяет, есть ли у NPC необходимые технологии для метода производства.
+
+        Args:
+            method_id: ID метода производства
+            known_technologies: Множество ID известных технологий
+
+        Returns:
+            True если все требуемые технологии известны
+        """
+        method = PRODUCTION_METHODS.get(method_id)
+        if not method:
+            return False
+
+        return all(
+            tech_id in known_technologies
+            for tech_id in method.required_technologies
+        )
