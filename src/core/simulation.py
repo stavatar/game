@@ -1486,6 +1486,81 @@ class Simulation:
         from .consistency import validate_state_consistency
         return validate_state_consistency(self)
 
+    def _get_npc_terrain_info(self, npc: SimulationNPC) -> dict:
+        """
+        Territory -> Economics Link:
+        Получает информацию о территории в позиции NPC.
+
+        Args:
+            npc: NPC для которого нужна информация
+
+        Returns:
+            Словарь с ключами:
+            - terrain_name: название типа территории (str)
+            - terrain_fertility: плодородность тайла (float 0-1)
+            - near_water: есть ли вода рядом (bool)
+            - in_forest: находится ли в лесу (bool)
+            - available_resources: доступные ресурсы (list)
+        """
+        # Получаем координаты NPC
+        grid_x, grid_y = npc.position.to_grid()
+
+        # Получаем тайл в позиции NPC
+        tile = self.map.get_tile(grid_x, grid_y)
+        if tile is None:
+            # Если тайл не найден, возвращаем значения по умолчанию
+            return {
+                "terrain_name": "GRASSLAND",
+                "terrain_fertility": 0.5,
+                "near_water": False,
+                "in_forest": False,
+                "available_resources": ["berries"],
+            }
+
+        terrain_name = tile.terrain.name
+
+        # Получаем плодородность с учётом сезона
+        season = self.climate.current_season.value
+        terrain_fertility = tile.get_effective_fertility(season)
+
+        # Проверяем, есть ли вода рядом (в радиусе 2 клеток)
+        near_water = self._check_near_water(grid_x, grid_y, radius=2)
+
+        # Проверяем, находится ли в лесу
+        from ..world.terrain import TerrainType
+        in_forest = tile.terrain in [TerrainType.FOREST, TerrainType.DENSE_FOREST]
+
+        # Получаем доступные ресурсы из Production системы
+        available_resources = self.production.get_terrain_resources(terrain_name)
+
+        return {
+            "terrain_name": terrain_name,
+            "terrain_fertility": terrain_fertility,
+            "near_water": near_water,
+            "in_forest": in_forest,
+            "available_resources": available_resources,
+        }
+
+    def _check_near_water(self, x: int, y: int, radius: int = 2) -> bool:
+        """
+        Проверяет, есть ли вода в радиусе от указанной точки.
+
+        Args:
+            x, y: Координаты центра
+            radius: Радиус поиска
+
+        Returns:
+            True если вода рядом
+        """
+        from ..world.terrain import TerrainType
+
+        for dx in range(-radius, radius + 1):
+            for dy in range(-radius, radius + 1):
+                tile = self.map.get_tile(x + dx, y + dy)
+                if tile and tile.terrain == TerrainType.WATER:
+                    return True
+        return False
+
     def _process_npc_actions(self) -> List[str]:
         """Обрабатывает действия NPC"""
         events = []
@@ -1508,6 +1583,7 @@ class Simulation:
         Решения модифицируются:
         - Верованиями через behavior_modifiers
         - Нормами через constraints (нормы ограничивают поведение)
+        - Территорией (Territory -> Economics Link)
 
         Модификаторы верований:
         - work_ethic: повышает приоритет работы
@@ -1519,6 +1595,11 @@ class Simulation:
         - mutual_aid: обязывает помогать
         - no_internal_violence: запрещает насилие
         - property_protection: запрещает захват чужого
+
+        Территория (Territory -> Economics Link):
+        - Тип территории влияет на выбор действия
+        - Рыбалка возможна только около воды
+        - Лес улучшает собирательство и охоту
         """
         # Приоритет: голод -> работа -> социализация
 
@@ -1530,6 +1611,13 @@ class Simulation:
 
         if npc.energy < 30:
             return "rest"
+
+        # === Territory -> Economics: получаем информацию о территории ===
+        terrain_info = self._get_npc_terrain_info(npc)
+        terrain_name = terrain_info["terrain_name"]
+        terrain_fertility = terrain_info["terrain_fertility"]
+        near_water = terrain_info["near_water"]
+        in_forest = terrain_info["in_forest"]
 
         # === Модификаторы поведения от верований ===
         work_ethic_mod = self.beliefs.get_behavior_modifier(npc.id, "work_ethic")
@@ -1546,10 +1634,55 @@ class Simulation:
         # respect_nature увеличивает предпочтение собирательства над охотой
         gathering_bonus = respect_nature_mod * 0.2
 
-        if productivity.get("gathering", 1.0) + gathering_bonus > work_threshold:
-            return "gather"
-        if productivity.get("hunting", 1.0) > work_threshold and npc.get_skill("hunting") > 0:
-            return "hunt"
+        # Territory -> Economics: модификаторы территории для собирательства
+        from ..economy.production import LaborType
+        terrain_gathering_mod = self.production.get_terrain_modifier(
+            terrain_name, LaborType.GATHERING, terrain_fertility
+        )
+        terrain_hunting_mod = self.production.get_terrain_modifier(
+            terrain_name, LaborType.HUNTING, terrain_fertility
+        )
+        terrain_fishing_mod = self.production.get_terrain_modifier(
+            terrain_name, LaborType.FISHING, terrain_fertility
+        )
+
+        # Собирательство: климат + территория + верования
+        gathering_score = (
+            productivity.get("gathering", 1.0) *
+            terrain_gathering_mod *
+            (1.0 + gathering_bonus)
+        )
+
+        # Охота: климат + территория
+        hunting_score = (
+            productivity.get("hunting", 1.0) *
+            terrain_hunting_mod
+        )
+
+        # Рыбалка: возможна только около воды
+        fishing_score = 0.0
+        if near_water and terrain_fishing_mod > 0:
+            fishing_score = (
+                productivity.get("fishing", 1.0) *
+                terrain_fishing_mod
+            )
+
+        # Выбираем лучшее действие на основе модифицированных оценок
+        best_action = "gather"
+        best_score = gathering_score
+
+        if hunting_score > best_score and npc.get_skill("hunting") > 0:
+            best_action = "hunt"
+            best_score = hunting_score
+
+        if fishing_score > best_score and fishing_score > work_threshold:
+            # Рыбалка доступна и выгодна
+            best_action = "fish"
+            best_score = fishing_score
+
+        # Проверяем, стоит ли вообще работать
+        if best_score > work_threshold:
+            return best_action
 
         # === Нормы влияют на социализацию ===
         # Норма взаимопомощи обязывает помогать другим
@@ -1785,13 +1918,19 @@ class Simulation:
         """
         Выполняет действие NPC.
 
-        Результаты модифицируются верованиями:
-        - respect_nature: бонус к собирательству
-        - work_ethic: бонус к эффективности труда
-        - sharing: влияет на обмен ресурсами
-        - theft: влияет на захват собственности
+        Результаты модифицируются:
+        - Верованиями (respect_nature, work_ethic, sharing, theft)
+        - Территорией (Territory -> Economics Link)
+        - Климатом (Climate -> Production Link)
         """
         events = []
+
+        # === Territory -> Economics: получаем информацию о территории ===
+        terrain_info = self._get_npc_terrain_info(npc)
+        terrain_name = terrain_info["terrain_name"]
+        terrain_fertility = terrain_info["terrain_fertility"]
+        near_water = terrain_info["near_water"]
+        in_forest = terrain_info["in_forest"]
 
         # === Получаем модификаторы поведения от верований ===
         respect_nature_mod = self.beliefs.get_behavior_modifier(npc.id, "respect_nature")
@@ -1817,6 +1956,13 @@ class Simulation:
             weather_mod = self.production.climate_modifiers.get("gathering", 1.0)
             amount *= weather_mod
 
+            # Territory -> Economics: модификатор территории
+            from ..economy.production import LaborType
+            terrain_mod = self.production.get_terrain_modifier(
+                terrain_name, LaborType.GATHERING, terrain_fertility
+            )
+            amount *= terrain_mod
+
             # Верования влияют на собирательство:
             # respect_nature дает бонус (духи благоволят)
             # work_ethic дает бонус к эффективности
@@ -1824,7 +1970,17 @@ class Simulation:
             amount *= belief_bonus
 
             if amount > 0.5:
-                npc.inventory.add(Resource(ResourceType.BERRIES, quantity=amount))
+                # Territory -> Economics: выбираем ресурс на основе территории
+                available_resources = terrain_info["available_resources"]
+                if "berries" in available_resources:
+                    npc.inventory.add(Resource(ResourceType.BERRIES, quantity=amount))
+                elif "mushrooms" in available_resources:
+                    # Грибы вместо ягод если на территории нет ягод
+                    npc.inventory.add(Resource(ResourceType.BERRIES, quantity=amount * 0.7))
+                else:
+                    # Базовое собирательство
+                    npc.inventory.add(Resource(ResourceType.BERRIES, quantity=amount * 0.5))
+
                 npc.set_skill("gathering", skill + 1)
                 npc.energy -= 10
                 npc.hunger += 5
@@ -1851,17 +2007,25 @@ class Simulation:
 
         elif action == "hunt":
             skill = npc.get_skill("hunting")
+
             # Climate -> Production: климат влияет на шанс успеха охоты
             hunting_climate_mod = self.production.climate_modifiers.get("hunting", 1.0)
+
+            # Territory -> Economics: территория влияет на охоту
+            from ..economy.production import LaborType
+            terrain_mod = self.production.get_terrain_modifier(
+                terrain_name, LaborType.HUNTING, terrain_fertility
+            )
+
             # work_ethic повышает шанс успешной охоты
-            success_chance = (0.3 + skill / 200 + work_ethic_mod * 0.1) * hunting_climate_mod
+            success_chance = (0.3 + skill / 200 + work_ethic_mod * 0.1) * hunting_climate_mod * terrain_mod
             success = random.random() < success_chance
 
             if success:
                 amount = 2 + skill / 30
                 # work_ethic дает бонус к добыче
-                # Climate -> Production: климат влияет на добычу
-                amount *= (1.0 + work_ethic_mod * 0.15) * hunting_climate_mod
+                # Climate -> Production + Territory -> Economics
+                amount *= (1.0 + work_ethic_mod * 0.15) * hunting_climate_mod * terrain_mod
                 npc.inventory.add(Resource(ResourceType.MEAT, quantity=amount))
                 npc.set_skill("hunting", skill + 1)
                 events.append(f"{npc.name} добыл дичь")
@@ -1880,6 +2044,43 @@ class Simulation:
 
             npc.energy -= 20
             npc.hunger += 10
+
+        elif action == "fish":
+            # Territory -> Economics: рыбалка возможна только около воды
+            if not near_water:
+                # Если воды нет рядом, просто собираем
+                return self._execute_action(npc, "gather")
+
+            skill = npc.get_skill("fishing") if hasattr(npc, '_skill_dict') else 0
+
+            # Climate -> Production
+            fishing_climate_mod = self.production.climate_modifiers.get("fishing", 1.0)
+
+            # Territory -> Economics: модификатор территории
+            from ..economy.production import LaborType
+            terrain_mod = self.production.get_terrain_modifier(
+                terrain_name, LaborType.FISHING, terrain_fertility
+            )
+
+            # work_ethic повышает шанс успешной рыбалки
+            success_chance = (0.4 + skill / 200 + work_ethic_mod * 0.1) * fishing_climate_mod * terrain_mod
+            success = random.random() < success_chance
+
+            if success:
+                amount = 2 + skill / 40
+                # Climate + Territory modifiers
+                amount *= fishing_climate_mod * terrain_mod * (1.0 + work_ethic_mod * 0.15)
+                npc.inventory.add(Resource(ResourceType.FISH, quantity=amount))
+                npc.set_skill("fishing", skill + 1)
+                events.append(f"{npc.name} поймал рыбу")
+
+                # === ТРАДИЦИИ: записываем успешную практику ===
+                tradition_event = self._record_practice_success("fishing")
+                if tradition_event:
+                    events.append(tradition_event)
+
+            npc.energy -= 15
+            npc.hunger += 7
 
         elif action == "rest":
             npc.energy = min(100, npc.energy + 20)
