@@ -532,9 +532,22 @@ class Simulation:
             if random.random() < 0.3:
                 self.knowledge.add_knowledge(npc.id, "stone_knapping")
 
-        # Начальные верования
+        # Начальные верования - сначала создаем базовое верование анимизм
+        # (возникает естественно при взаимодействии с природой)
+        economic_conditions = {
+            "gathering_activity": len(self.npcs),  # Все NPC занимаются собирательством
+        }
+        social_conditions = {"deaths_occurred": 0}
+        initial_belief = self.beliefs.check_belief_emergence(
+            economic_conditions, social_conditions, self.year
+        )
+        if initial_belief:
+            events.append(f"Возникло верование: {initial_belief.name}")
+
+        # Все начальные NPC разделяют базовое верование (анимизм)
         for npc in self.npcs.values():
-            self.beliefs.add_belief_to_npc(npc.id, "animism")
+            if "animism" in self.beliefs.beliefs:
+                self.beliefs.add_belief_to_npc(npc.id, "animism")
 
         return events
 
@@ -987,7 +1000,15 @@ class Simulation:
         return events
 
     def _decide_action(self, npc: SimulationNPC) -> str:
-        """Решает, что делать NPC"""
+        """
+        Решает, что делать NPC.
+
+        Решения модифицируются верованиями через behavior_modifiers:
+        - work_ethic: повышает приоритет работы
+        - sharing: влияет на социализацию
+        - respect_nature: влияет на собирательство
+        - obedience: влияет на подчинение приказам
+        """
         # Приоритет: голод -> работа -> социализация
 
         if npc.hunger > 70:
@@ -999,16 +1020,34 @@ class Simulation:
         if npc.energy < 30:
             return "rest"
 
-        # Работа
+        # === Модификаторы поведения от верований ===
+        work_ethic_mod = self.beliefs.get_behavior_modifier(npc.id, "work_ethic")
+        respect_nature_mod = self.beliefs.get_behavior_modifier(npc.id, "respect_nature")
+        sharing_mod = self.beliefs.get_behavior_modifier(npc.id, "sharing")
+
+        # Работа (базовый приоритет модифицируется work_ethic)
         season = self.climate.current_season.value
         productivity = self.climate.get_season_productivity()
 
-        if productivity.get("gathering", 0) > 0.5:
+        # work_ethic повышает порог для работы (трудолюбивые работают больше)
+        work_threshold = 0.5 - work_ethic_mod * 0.3  # work_ethic=0.3 -> порог 0.41
+
+        # respect_nature увеличивает предпочтение собирательства над охотой
+        gathering_bonus = respect_nature_mod * 0.2
+
+        if productivity.get("gathering", 0) + gathering_bonus > work_threshold:
             return "gather"
-        if productivity.get("hunting", 0) > 0.5 and npc.get_skill("hunting") > 0:
+        if productivity.get("hunting", 0) > work_threshold and npc.get_skill("hunting") > 0:
             return "hunt"
 
-        return "socialize"
+        # sharing_mod положительный -> больше склонность к социализации
+        # sharing_mod отрицательный -> меньше склонность
+        socialize_chance = 0.7 + sharing_mod * 0.3
+        if random.random() < socialize_chance:
+            return "socialize"
+
+        # По умолчанию - собирательство (всегда полезно)
+        return "gather"
 
     def _try_claim_land(self, npc: SimulationNPC) -> Optional[str]:
         """
@@ -1210,8 +1249,22 @@ class Simulation:
         return None
 
     def _execute_action(self, npc: SimulationNPC, action: str) -> List[str]:
-        """Выполняет действие NPC"""
+        """
+        Выполняет действие NPC.
+
+        Результаты модифицируются верованиями:
+        - respect_nature: бонус к собирательству
+        - work_ethic: бонус к эффективности труда
+        - sharing: влияет на обмен ресурсами
+        - theft: влияет на захват собственности
+        """
         events = []
+
+        # === Получаем модификаторы поведения от верований ===
+        respect_nature_mod = self.beliefs.get_behavior_modifier(npc.id, "respect_nature")
+        work_ethic_mod = self.beliefs.get_behavior_modifier(npc.id, "work_ethic")
+        sharing_mod = self.beliefs.get_behavior_modifier(npc.id, "sharing")
+        theft_mod = self.beliefs.get_behavior_modifier(npc.id, "theft")
 
         if action == "eat":
             # Едим
@@ -1230,6 +1283,12 @@ class Simulation:
             weather_mod = self.climate.current_weather.gathering_modifier
             amount *= weather_mod
 
+            # Верования влияют на собирательство:
+            # respect_nature дает бонус (духи благоволят)
+            # work_ethic дает бонус к эффективности
+            belief_bonus = 1.0 + respect_nature_mod * 0.2 + work_ethic_mod * 0.15
+            amount *= belief_bonus
+
             if amount > 0.5:
                 npc.inventory.add(Resource(ResourceType.BERRIES, quantity=amount))
                 npc.set_skill("gathering", skill + 1)
@@ -1244,24 +1303,33 @@ class Simulation:
                     events.append(f"{npc.name} открыл: {discovery.name}!")
 
                 # Попытка захватить землю при накоплении излишка (INT-002)
-                claim_event = self._try_claim_land(npc)
-                if claim_event:
-                    events.append(claim_event)
+                # theft_mod отрицательный = меньше склонность к захвату
+                # (property_sacred верование снижает желание "красть" землю у общины)
+                if theft_mod >= -0.3:  # Сильное табу на "кражу" блокирует захват
+                    claim_event = self._try_claim_land(npc)
+                    if claim_event:
+                        events.append(claim_event)
 
         elif action == "hunt":
             skill = npc.get_skill("hunting")
-            success = random.random() < (0.3 + skill / 200)
+            # work_ethic повышает шанс успешной охоты
+            success_chance = 0.3 + skill / 200 + work_ethic_mod * 0.1
+            success = random.random() < success_chance
 
             if success:
                 amount = 2 + skill / 30
+                # work_ethic дает бонус к добыче
+                amount *= (1.0 + work_ethic_mod * 0.15)
                 npc.inventory.add(Resource(ResourceType.MEAT, quantity=amount))
                 npc.set_skill("hunting", skill + 1)
                 events.append(f"{npc.name} добыл дичь")
 
                 # Попытка захватить землю при накоплении излишка (INT-002)
-                claim_event = self._try_claim_land(npc)
-                if claim_event:
-                    events.append(claim_event)
+                # theft_mod влияет на склонность к захвату
+                if theft_mod >= -0.3:
+                    claim_event = self._try_claim_land(npc)
+                    if claim_event:
+                        events.append(claim_event)
 
             npc.energy -= 20
             npc.hunger += 10
@@ -1279,12 +1347,18 @@ class Simulation:
                 other = random.choice(others)
 
                 # Передача знаний
+                # respect_elders влияет на передачу традиционных знаний
+                respect_elders_mod = self.beliefs.get_behavior_modifier(npc.id, "respect_elders")
+                tradition_mod = self.beliefs.get_behavior_modifier(npc.id, "tradition")
+
                 my_knowledge = self.knowledge.get_npc_knowledge(npc.id)
                 for tech_id in my_knowledge:
                     teaching_skill = npc.get_skill("teaching") or 25  # Default if not set
+                    # Верования влияют на эффективность передачи знаний
+                    knowledge_bonus = 1.0 + respect_elders_mod * 0.2 + tradition_mod * 0.1
                     if self.knowledge.transfer_knowledge(
                             npc.id, other.id, tech_id, 1.0,
-                            teaching_skill / 50,
+                            teaching_skill / 50 * knowledge_bonus,
                             other.intelligence
                     ):
                         events.append(f"{npc.name} научил {other.name}: {tech_id}")
@@ -1296,17 +1370,39 @@ class Simulation:
 
                 # Распространение классового сознания (если классы возникли)
                 if self.classes.classes_emerged:
+                    # obedience снижает распространение сознания
+                    # rebellion повышает
+                    obedience_mod = self.beliefs.get_behavior_modifier(npc.id, "obedience")
+                    rebellion_mod = self.beliefs.get_behavior_modifier(npc.id, "rebellion")
+                    consciousness_multiplier = 1.0 - obedience_mod * 0.3 + rebellion_mod * 0.3
+
                     self.classes.spread_consciousness(
                         npc.id,
                         other.id,
                         belief_system=self.beliefs,
-                        relationship_strength=0.5  # Можно улучшить с системой отношений
+                        relationship_strength=0.5 * max(0.1, consciousness_multiplier)
                     )
 
                 # Попытка торговли собственностью
-                trade_event = self._try_property_trade(npc, other)
-                if trade_event:
-                    events.append(trade_event)
+                # sharing_mod влияет на готовность к обмену
+                if sharing_mod > -0.5:  # Сильный антиобщественный настрой блокирует торговлю
+                    trade_event = self._try_property_trade(npc, other)
+                    if trade_event:
+                        events.append(trade_event)
+
+                # === Возможность поделиться ресурсами (новое поведение) ===
+                # sharing_mod положительный -> больше шанс поделиться
+                if sharing_mod > 0:
+                    share_chance = sharing_mod * 0.3  # До 9% при sharing=0.3
+                    other_hungry = other.hunger > 60
+                    npc_has_food = npc.inventory.get_food_amount() > 3
+
+                    if other_hungry and npc_has_food and random.random() < share_chance:
+                        # Делимся едой
+                        shared = npc.inventory.remove(ResourceType.BERRIES, 1)
+                        if shared:
+                            other.inventory.add(Resource(ResourceType.BERRIES, quantity=1))
+                            events.append(f"{npc.name} поделился едой с {other.name}")
 
         return events
 

@@ -1,25 +1,25 @@
 {
   "active": true,
-  "spec": "002-",
+  "spec": "003-",
   "state": "building",
   "subtasks": {
-    "completed": 32,
-    "total": 33,
+    "completed": 11,
+    "total": 29,
     "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "Final Validation",
+    "current": "Bidirectional Causality",
     "id": null,
-    "total": 4
+    "total": 5
   },
   "workers": {
     "active": 0,
     "max": 1
   },
   "session": {
-    "number": 12,
-    "started_at": "2026-02-01T21:12:22.512194"
+    "number": 17,
+    "started_at": "2026-02-01T23:31:20.363196"
   },
-  "last_update": "2026-02-01T21:57:49.037769"
+  "last_update": "2026-02-02T00:09:44.824932"
 }
