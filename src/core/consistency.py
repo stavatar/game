@@ -13,6 +13,8 @@ from typing import Dict, List, Set, Optional, Any, TYPE_CHECKING
 from enum import Enum, auto
 import logging
 
+from ..economy.property import PropertyType
+
 if TYPE_CHECKING:
     from .simulation import Simulation
 
@@ -255,7 +257,7 @@ def _check_property_consistency(simulation: 'Simulation', report: ConsistencyRep
 
         if not owner_id:
             # Собственность без владельца - допустимо для общинной
-            if prop.is_private:
+            if prop.owner_type == PropertyType.PRIVATE:
                 report.add(
                     ConsistencyLevel.WARNING,
                     "property",

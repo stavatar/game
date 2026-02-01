@@ -707,6 +707,30 @@ class Simulation:
                     importance=EventImportance.NOTABLE,
                 )
                 self.event_bus.publish(transfer_event)
+        else:
+            # Нет наследника - освобождаем собственность (становится общинной)
+            released = self.ownership.release_property(npc_id, self.year)
+            if released:
+                release_log = (
+                    f"Собственность {npc.name} ({len(released)} объектов) "
+                    f"возвращена общине (нет наследников)"
+                )
+                self.event_log.append(release_log)
+
+                # Публикуем событие освобождения собственности
+                release_event = Event(
+                    event_type=EventType.PROPERTY_LOST,
+                    year=self.year,
+                    month=self.month,
+                    day=self.day,
+                    actor_id=npc_id,
+                    data={
+                        "method": "без_наследников",
+                        "property_count": len(released),
+                    },
+                    importance=EventImportance.MINOR,
+                )
+                self.event_bus.publish(release_event)
 
         # === 5. КЛАССЫ: удаляем из классовой системы ===
         npc_class = self.classes.npc_class.get(npc_id)
