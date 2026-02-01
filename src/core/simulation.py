@@ -851,6 +851,95 @@ class Simulation:
                     # Общинники и прочие
                     social_class.political_power = 0.3
 
+    def update_base_superstructure_chain(self) -> List[str]:
+        """
+        Обновляет причинную цепочку: Собственность → Класс → Идеология.
+
+        По Марксу:
+        1. Базис (экономические отношения собственности) определяет
+        2. Классовую структуру, которая определяет
+        3. Надстройку (идеология, верования)
+
+        Это центральный механизм марксистской теории:
+        - Изменения в собственности → переоценка классов
+        - Изменения в классах → обновление доминирующей идеологии
+        - Доминирующая идеология → распространяется быстрее
+        """
+        events = []
+
+        # Шаг 1: Обновляем классы на основе собственности
+        # (вызывается из _process_class_conflicts, но для полноты цепочки)
+        self._update_npc_classes()
+
+        # Шаг 2: Обновляем отношения между классами
+        self.classes.update_class_relations(self.year)
+
+        # Шаг 3: Обновляем доминирующую идеологию
+        if self.classes.classes_emerged:
+            # Получаем распределение власти по классам
+            class_power = self.classes.get_class_power()
+
+            # Обновляем доминирующую идеологию
+            self.beliefs.update_dominant_ideology(class_power)
+
+            # Логируем изменения в идеологии
+            if self.beliefs.dominant_beliefs:
+                dominant_belief_names = [
+                    self.beliefs.beliefs[bid].name
+                    for bid in self.beliefs.dominant_beliefs
+                    if bid in self.beliefs.beliefs
+                ]
+                if dominant_belief_names:
+                    events.append(
+                        f"Доминирующая идеология: {', '.join(dominant_belief_names)}"
+                    )
+
+            # Шаг 4: Распространяем доминирующие верования быстрее
+            self._spread_dominant_ideology()
+
+        return events
+
+    def _spread_dominant_ideology(self) -> None:
+        """
+        Распространяет доминирующую идеологию среди населения.
+
+        По Марксу: идеи господствующего класса становятся
+        господствующими идеями эпохи.
+
+        Доминирующие верования распространяются быстрее
+        благодаря институциональной поддержке.
+        """
+        if not self.beliefs.dominant_beliefs:
+            return
+
+        # Для каждого NPC, проверяем, приняли ли они доминирующую идеологию
+        for npc_id, npc in self.npcs.items():
+            if not npc.is_alive:
+                continue
+
+            npc_beliefs = self.beliefs.npc_beliefs.get(npc_id, set())
+
+            for belief_id in self.beliefs.dominant_beliefs:
+                if belief_id not in npc_beliefs:
+                    # Повышенный шанс принять доминирующую идеологию
+                    # Модификатор зависит от класса NPC
+                    npc_class = self.classes.npc_class.get(npc_id)
+
+                    # Члены господствующего класса легче принимают свою идеологию
+                    influence = 0.05  # Базовое влияние 5% за год
+
+                    if npc_class and npc_class.is_exploiter:
+                        influence *= 2.0  # Эксплуататоры легко принимают свою идеологию
+                    elif npc_class and npc_class.is_exploited:
+                        # Проверяем классовое сознание - высокое сознание сопротивляется
+                        if npc_class in self.classes.classes:
+                            consciousness = self.classes.classes[npc_class].class_consciousness
+                            influence *= (1 - consciousness * 0.5)  # Сознание снижает влияние
+
+                    # Пытаемся распространить верование
+                    if random.random() < influence:
+                        self.beliefs.add_belief_to_npc(npc_id, belief_id)
+
     def _process_new_year(self) -> List[str]:
         """Обрабатывает начало нового года"""
         events = [f"=== Наступил год {self.year} ==="]
@@ -874,6 +963,11 @@ class Simulation:
         if self.classes.classes_emerged:
             class_dist = self.classes.get_class_distribution()
             events.append(f"Классы: {class_dist}")
+
+        # === ПРИЧИННАЯ ЦЕПОЧКА: Собственность → Класс → Идеология ===
+        # Обновляем надстройку на основе базиса (раз в год)
+        chain_events = self.update_base_superstructure_chain()
+        events.extend(chain_events)
 
         return events
 
