@@ -23,7 +23,7 @@ from ..economy.production import Production, PRODUCTION_METHODS
 
 from ..society.family import FamilySystem
 from ..society.demography import DemographySystem
-from ..society.classes import ClassSystem, ClassType
+from ..society.classes import ClassSystem, ClassType, SocialClass
 
 from ..culture.beliefs import BeliefSystem
 from ..culture.traditions import TraditionSystem
@@ -452,6 +452,107 @@ class Simulation:
         if description:
             self.event_log.append(description)
 
+    def _get_economic_conditions(self) -> Dict[str, any]:
+        """
+        Собирает экономические условия из всех систем.
+
+        Возвращает словарь с ключами:
+        - gathering_activity: количество работающих NPC
+        - private_property_exists: возникла ли частная собственность
+        - inequality: коэффициент Джини для всей собственности
+        - surplus_produced: общий произведённый прибавочный продукт
+        - exploitation_rate: норма эксплуатации (0-1)
+        - land_inequality: неравенство в землевладении
+        - non_workers_exist: есть ли не-работающие собственники
+        - wage_labor_exists: существует ли наёмный труд
+        """
+        # Базовые метрики
+        workers_count = sum(1 for n in self.npcs.values() if n.is_alive and n.can_work())
+
+        # Собственность и неравенство
+        property_inequality = self.ownership.calculate_inequality()
+
+        # Вычисляем неравенство в землевладении отдельно
+        land_owners = set()
+        all_living_npc_ids = {n.id for n in self.npcs.values() if n.is_alive}
+        for prop in self.ownership.properties.values():
+            if prop.category.name == "LAND" and prop.owner_id:
+                land_owners.add(prop.owner_id)
+        landless_count = len(all_living_npc_ids - land_owners)
+        land_owner_count = len(land_owners)
+        total_count = len(all_living_npc_ids)
+
+        # Неравенство в землевладении: (безземельные / всего)
+        land_inequality = landless_count / total_count if total_count > 0 else 0.0
+
+        # Прибавочный продукт из статистики производства
+        production_stats = self.production.get_statistics()
+        total_produced = sum(production_stats.get("produced", {}).values())
+        total_consumed = sum(production_stats.get("consumed", {}).values())
+        surplus_produced = max(0.0, total_produced - total_consumed)
+
+        # Норма эксплуатации: проверяем, есть ли эксплуататоры и эксплуатируемые
+        exploitation_rate = 0.0
+        if self.classes.classes_emerged:
+            # Эксплуататоры: землевладельцы и вожди
+            exploiters = []
+            exploited = []
+            for class_type, social_class in self.classes.classes.items():
+                if class_type.is_exploiter:
+                    exploiters.extend(social_class.members)
+                elif class_type.is_exploited:
+                    exploited.extend(social_class.members)
+
+            if exploiters and exploited:
+                # Вычисляем среднее богатство эксплуататоров vs эксплуатируемых
+                exploiter_wealth = sum(
+                    self.ownership.calculate_wealth(npc_id) +
+                    self.npcs[npc_id].inventory.total_value()
+                    for npc_id in exploiters if npc_id in self.npcs
+                )
+                exploited_wealth = sum(
+                    self.ownership.calculate_wealth(npc_id) +
+                    self.npcs[npc_id].inventory.total_value()
+                    for npc_id in exploited if npc_id in self.npcs
+                )
+                total_wealth = exploiter_wealth + exploited_wealth
+                if total_wealth > 0:
+                    # Норма эксплуатации: доля богатства у эксплуататоров
+                    exploitation_rate = exploiter_wealth / total_wealth
+
+        # Проверяем, есть ли не-работающие собственники (те, кто владеет средствами производства
+        # но сам не работает - живёт за счёт труда других)
+        non_workers_exist = False
+        means_owners = self.ownership.get_means_of_production_owners()
+        for owner_id in means_owners:
+            npc = self.npcs.get(owner_id)
+            if npc and npc.is_alive:
+                # Проверяем, есть ли у него работники
+                npc_class = self.classes.npc_class.get(owner_id)
+                if npc_class and npc_class.is_exploiter:
+                    # Есть эксплуатируемые - значит не работает сам
+                    if any(c.is_exploited and len(self.classes.classes.get(c, SocialClass(c)).members) > 0
+                           for c in self.classes.classes):
+                        non_workers_exist = True
+                        break
+
+        # Наёмный труд существует, если есть класс LABORER с членами
+        wage_labor_exists = (
+            ClassType.LABORER in self.classes.classes and
+            self.classes.classes[ClassType.LABORER].get_size() > 0
+        )
+
+        return {
+            "gathering_activity": workers_count,
+            "private_property_exists": self.ownership.private_property_emerged,
+            "inequality": property_inequality,
+            "surplus_produced": surplus_produced,
+            "exploitation_rate": exploitation_rate,
+            "land_inequality": land_inequality,
+            "non_workers_exist": non_workers_exist,
+            "wage_labor_exists": wage_labor_exists,
+        }
+
     def _find_heir(self, deceased_id: str) -> Optional[str]:
         """
         Находит наследника для умершего NPC.
@@ -549,9 +650,7 @@ class Simulation:
 
         # Начальные верования - сначала создаем базовое верование анимизм
         # (возникает естественно при взаимодействии с природой)
-        economic_conditions = {
-            "gathering_activity": len(self.npcs),  # Все NPC занимаются собирательством
-        }
+        economic_conditions = self._get_economic_conditions()
         social_conditions = {"deaths_occurred": 0}
         initial_belief = self.beliefs.check_belief_emergence(
             economic_conditions, social_conditions, self.year
@@ -770,11 +869,7 @@ class Simulation:
         self._apply_tradition_effects()
 
         # === ВЕРОВАНИЯ: проверяем возникновение новых ===
-        economic_conditions = {
-            "gathering_activity": sum(1 for n in self.npcs.values() if n.can_work()),
-            "private_property_exists": self.ownership.private_property_emerged,
-            "inequality": self.ownership.calculate_inequality(),
-        }
+        economic_conditions = self._get_economic_conditions()
         social_conditions = {
             "deaths_occurred": self.demography.deaths_this_year,
             "classes_emerged": self.classes.classes_emerged,
