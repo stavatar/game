@@ -354,6 +354,7 @@ class Simulation:
         Обработчик события заявки на собственность.
 
         Выполняет:
+        - Создание нормы защиты собственности (при первом захвате)
         - Обновление классовой принадлежности NPC
         - Логирование
         """
@@ -364,6 +365,14 @@ class Simulation:
         npc = self.npcs.get(npc_id)
         if not npc:
             return
+
+        # === НОРМЫ: создаём норму защиты собственности при первом захвате ===
+        # По Марксу: нормы возникают для защиты интересов собственников
+        if event.data.get("as_private") and "property_protection" not in self.norms.norms:
+            norm = self.norms.add_property_norm(self.year)
+            self.event_log.append(
+                f"Возникла норма: {norm.name} - {norm.description}"
+            )
 
         # Обновляем классы при изменении собственности
         self._update_npc_classes()
@@ -866,17 +875,18 @@ class Simulation:
 
     def update_base_superstructure_chain(self) -> List[str]:
         """
-        Обновляет причинную цепочку: Собственность → Класс → Идеология.
+        Обновляет причинную цепочку: Собственность → Класс → Нормы/Идеология.
 
         По Марксу:
         1. Базис (экономические отношения собственности) определяет
         2. Классовую структуру, которая определяет
-        3. Надстройку (идеология, верования)
+        3. Надстройку (нормы, идеология, верования)
 
         Это центральный механизм марксистской теории:
         - Изменения в собственности → переоценка классов
-        - Изменения в классах → обновление доминирующей идеологии
+        - Изменения в классах → обновление норм и доминирующей идеологии
         - Доминирующая идеология → распространяется быстрее
+        - Нормы, выгодные господствующему классу → соблюдаются лучше
         """
         events = []
 
@@ -886,6 +896,12 @@ class Simulation:
 
         # Шаг 2: Обновляем отношения между классами
         self.classes.update_class_relations(self.year)
+
+        # Шаг 2.5: Обновляем нормы на основе классовой власти
+        # Нормы, выгодные господствующему классу, соблюдаются лучше
+        if self.classes.classes_emerged:
+            class_power = self.classes.get_class_power()
+            self.norms.update_compliance_from_class_power(class_power)
 
         # Шаг 3: Обновляем доминирующую идеологию
         if self.classes.classes_emerged:
@@ -1003,11 +1019,20 @@ class Simulation:
         """
         Решает, что делать NPC.
 
-        Решения модифицируются верованиями через behavior_modifiers:
+        Решения модифицируются:
+        - Верованиями через behavior_modifiers
+        - Нормами через constraints (нормы ограничивают поведение)
+
+        Модификаторы верований:
         - work_ethic: повышает приоритет работы
         - sharing: влияет на социализацию
         - respect_nature: влияет на собирательство
         - obedience: влияет на подчинение приказам
+
+        Нормы:
+        - mutual_aid: обязывает помогать
+        - no_internal_violence: запрещает насилие
+        - property_protection: запрещает захват чужого
         """
         # Приоритет: голод -> работа -> социализация
 
@@ -1040,9 +1065,16 @@ class Simulation:
         if productivity.get("hunting", 0) > work_threshold and npc.get_skill("hunting") > 0:
             return "hunt"
 
+        # === Нормы влияют на социализацию ===
+        # Норма взаимопомощи обязывает помогать другим
+        npc_class = self.classes.npc_class.get(npc.id)
+        class_name = npc_class.name if npc_class else ""
+        help_tendency = self.norms.should_help(class_name)
+
         # sharing_mod положительный -> больше склонность к социализации
         # sharing_mod отрицательный -> меньше склонность
-        socialize_chance = 0.7 + sharing_mod * 0.3
+        # help_tendency от норм дополнительно влияет
+        socialize_chance = 0.5 + sharing_mod * 0.2 + help_tendency * 0.3
         if random.random() < socialize_chance:
             return "socialize"
 
@@ -1057,9 +1089,24 @@ class Simulation:
         - NPC накопил достаточно ресурсов (излишек)
         - NPC находится на незанятой земле
         - Вероятность зависит от черт характера
+        - НОРМЫ: норма property_protection ограничивает захват
 
         Возвращает описание события или None.
         """
+        # === НОРМЫ: проверяем ограничения на захват ===
+        npc_class = self.classes.npc_class.get(npc.id)
+        class_name = npc_class.name if npc_class else ""
+
+        # Если норма запрещает захват для этого класса - не захватываем
+        if not self.norms.can_claim_property(class_name):
+            # Нормы запрещают захват чужой собственности
+            # Но если собственности ещё нет - норма не применяется
+            if self.ownership.private_property_emerged:
+                # Проверяем соблюдаемость нормы
+                constraint = self.norms.get_action_constraint("claim_land", class_name)
+                if random.random() < constraint:
+                    return None  # NPC соблюдает норму
+
         # Проверяем, есть ли излишек ресурсов (признак прибавочного продукта)
         total_food = npc.inventory.get_food_amount()
         total_value = npc.inventory.total_value()
@@ -1390,19 +1437,25 @@ class Simulation:
                     if trade_event:
                         events.append(trade_event)
 
-                # === Возможность поделиться ресурсами (новое поведение) ===
-                # sharing_mod положительный -> больше шанс поделиться
-                if sharing_mod > 0:
-                    share_chance = sharing_mod * 0.3  # До 9% при sharing=0.3
-                    other_hungry = other.hunger > 60
-                    npc_has_food = npc.inventory.get_food_amount() > 3
+                # === Возможность поделиться ресурсами ===
+                # НОРМЫ: норма mutual_aid обязывает делиться
+                # Верования: sharing_mod дополнительно влияет
+                npc_class = self.classes.npc_class.get(npc.id)
+                class_name = npc_class.name if npc_class else ""
+                norm_help = self.norms.should_help(class_name)
 
-                    if other_hungry and npc_has_food and random.random() < share_chance:
-                        # Делимся едой
-                        shared = npc.inventory.remove(ResourceType.BERRIES, 1)
-                        if shared:
-                            other.inventory.add(Resource(ResourceType.BERRIES, quantity=1))
-                            events.append(f"{npc.name} поделился едой с {other.name}")
+                # Базовый шанс от норм + модификатор от верований
+                share_chance = norm_help * 0.2 + sharing_mod * 0.2
+
+                other_hungry = other.hunger > 60
+                npc_has_food = npc.inventory.get_food_amount() > 3
+
+                if other_hungry and npc_has_food and random.random() < share_chance:
+                    # Делимся едой
+                    shared = npc.inventory.remove(ResourceType.BERRIES, 1)
+                    if shared:
+                        other.inventory.add(Resource(ResourceType.BERRIES, quantity=1))
+                        events.append(f"{npc.name} поделился едой с {other.name}")
 
         return events
 
