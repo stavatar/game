@@ -281,6 +281,11 @@ class Simulation:
         # Подписка на события смерти
         self.event_bus.subscribe(EventType.NPC_DIED, self._on_npc_death)
 
+        # Подписка на события собственности
+        self.event_bus.subscribe(EventType.PROPERTY_CLAIMED, self._on_property_claimed)
+        self.event_bus.subscribe(EventType.PROPERTY_TRANSFERRED, self._on_property_transferred)
+        self.event_bus.subscribe(EventType.PROPERTY_LOST, self._on_property_lost)
+
     def _on_npc_death(self, event: Event) -> None:
         """
         Обработчик события смерти NPC.
@@ -311,6 +316,73 @@ class Simulation:
             spouse = self.npcs.get(npc.spouse_id)
             if spouse:
                 spouse.spouse_id = None
+
+        # Добавляем в лог событий
+        description = event.format_description()
+        if description:
+            self.event_log.append(description)
+
+    def _on_property_claimed(self, event: Event) -> None:
+        """
+        Обработчик события заявки на собственность.
+
+        Выполняет:
+        - Обновление классовой принадлежности NPC
+        - Логирование
+        """
+        npc_id = event.actor_id
+        if not npc_id:
+            return
+
+        npc = self.npcs.get(npc_id)
+        if not npc:
+            return
+
+        # Обновляем классы при изменении собственности
+        self._update_npc_classes()
+
+        # Добавляем в лог событий
+        description = event.format_description()
+        if description:
+            self.event_log.append(description)
+
+    def _on_property_transferred(self, event: Event) -> None:
+        """
+        Обработчик события передачи собственности.
+
+        Выполняет:
+        - Обновление классовой принадлежности обоих NPC
+        - Логирование
+        """
+        from_npc_id = event.actor_id
+        to_npc_id = event.target_id
+
+        # Обновляем классы при изменении собственности
+        self._update_npc_classes()
+
+        # Добавляем в лог событий
+        description = event.format_description()
+        if description:
+            self.event_log.append(description)
+
+    def _on_property_lost(self, event: Event) -> None:
+        """
+        Обработчик события потери собственности.
+
+        Выполняет:
+        - Обновление классовой принадлежности NPC
+        - Логирование
+        """
+        npc_id = event.actor_id
+        if not npc_id:
+            return
+
+        npc = self.npcs.get(npc_id)
+        if not npc:
+            return
+
+        # Обновляем классы при изменении собственности
+        self._update_npc_classes()
 
         # Добавляем в лог событий
         description = event.format_description()
