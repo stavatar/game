@@ -244,6 +244,12 @@ class Simulation:
         self.total_days: int = 0
         self.generations: int = 1
 
+        # === Отслеживание практик для традиций ===
+        # Практика -> количество успешных выполнений
+        self._practice_successes: Dict[str, int] = {}
+        # Последний сезон (для обнаружения смены сезона)
+        self._last_season: Optional[Season] = None
+
         # Кэш для UI
         self._world_map_cache: List[List[str]] = None
         self._world_map_dirty: bool = True
@@ -719,6 +725,14 @@ class Simulation:
             # Порча еды
             spoiled = npc.inventory.decay_all(1.0)
 
+        # === ТРАДИЦИИ: проверяем сезонные праздники ===
+        celebration_event = self._check_season_celebration()
+        if celebration_event:
+            events.append(celebration_event)
+
+        # === ТРАДИЦИИ: применяем эффекты существующих традиций ===
+        self._apply_tradition_effects()
+
         # Проверяем возникновение верований
         economic_conditions = {
             "gathering_activity": sum(1 for n in self.npcs.values() if n.can_work()),
@@ -927,6 +941,123 @@ class Simulation:
             self._spread_dominant_ideology()
 
         return events
+
+    def _record_practice_success(self, practice_name: str) -> Optional[str]:
+        """
+        Записывает успешную практику и проверяет возникновение традиции.
+
+        Традиции возникают из повторяющихся успешных действий.
+        Когда практика повторяется достаточное количество раз,
+        она становится традицией.
+
+        Args:
+            practice_name: Название практики (gathering, hunting, trading, etc.)
+
+        Returns:
+            Описание события если традиция возникла, иначе None
+        """
+        # Увеличиваем счётчик успешных выполнений
+        self._practice_successes[practice_name] = (
+            self._practice_successes.get(practice_name, 0) + 1
+        )
+
+        # Проверяем возникновение традиции
+        # (требуется минимум 3 успешных повторения)
+        tradition = self.traditions.check_tradition_emergence(
+            repeated_event=practice_name,
+            success_count=self._practice_successes[practice_name],
+            year=self.year
+        )
+
+        if tradition:
+            return f"Возникла традиция: {tradition.name} (из практики {practice_name})"
+
+        return None
+
+    def _check_season_celebration(self) -> Optional[str]:
+        """
+        Проверяет смену сезона и создаёт сезонный праздник.
+
+        По мере развития общества, смена сезонов становится
+        поводом для праздников (урожай, весеннее равноденствие и т.д.)
+
+        Returns:
+            Описание события если праздник создан, иначе None
+        """
+        current_season = self.climate.current_season
+
+        # Проверяем смену сезона
+        if self._last_season is None:
+            self._last_season = current_season
+            return None
+
+        if current_season == self._last_season:
+            return None
+
+        # Сезон сменился
+        self._last_season = current_season
+
+        # Праздники возникают когда общество достаточно развито
+        # и имеет излишки для празднования
+        population = len([n for n in self.npcs.values() if n.is_alive])
+        if population < 5:
+            return None
+
+        # Проверяем наличие традиций для этого сезона
+        season_trigger = f"season:{current_season.value}"
+        existing = self.traditions.get_traditions_for_trigger(season_trigger)
+        if existing:
+            # Традиция уже есть
+            return None
+
+        # Названия сезонных праздников
+        season_celebrations = {
+            Season.SPRING: ("Праздник весны", "Праздник пробуждения природы"),
+            Season.SUMMER: ("Праздник лета", "Праздник солнца и плодородия"),
+            Season.AUTUMN: ("Праздник урожая", "Праздник благодарности за урожай"),
+            Season.WINTER: ("Праздник зимы", "Праздник выживания в холода"),
+        }
+
+        if current_season not in season_celebrations:
+            return None
+
+        # Шанс создать праздник зависит от года и благополучия
+        # В ранние годы праздники возникают редко
+        celebration_chance = min(0.3, self.year * 0.02)
+        if random.random() > celebration_chance:
+            return None
+
+        name, description = season_celebrations[current_season]
+        tradition = self.traditions.add_seasonal_celebration(
+            name=name,
+            season=current_season.value,
+            year=self.year,
+            description=description
+        )
+
+        return f"Возник праздник: {tradition.name}"
+
+    def _apply_tradition_effects(self) -> None:
+        """
+        Применяет эффекты традиций к NPC.
+
+        Традиции укрепляют социальную сплочённость и влияют на поведение.
+        Участники традиций получают бонус к счастью и социальным связям.
+        """
+        for tradition in self.traditions.traditions.values():
+            # Применяем бонус социальной сплочённости
+            # Все NPC получают небольшой бонус от существующих традиций
+            cohesion_bonus = tradition.social_cohesion_bonus * 0.01  # Небольшой эффект
+
+            for npc in self.npcs.values():
+                if not npc.is_alive:
+                    continue
+
+                # Традиции повышают удовлетворённость социальных потребностей
+                from ..npc.needs import Need
+                social_need = npc.needs.get(Need.SOCIAL)
+                if social_need:
+                    social_need.value = min(100, social_need.value + cohesion_bonus)
 
     def _spread_dominant_ideology(self) -> None:
         """
@@ -1342,6 +1473,11 @@ class Simulation:
                 npc.energy -= 10
                 npc.hunger += 5
 
+                # === ТРАДИЦИИ: записываем успешную практику ===
+                tradition_event = self._record_practice_success("gathering")
+                if tradition_event:
+                    events.append(tradition_event)
+
                 # Шанс открыть технологию
                 discovery = self.knowledge.try_discovery(
                     npc.id, "gathering", npc.intelligence, self.year
@@ -1370,6 +1506,11 @@ class Simulation:
                 npc.inventory.add(Resource(ResourceType.MEAT, quantity=amount))
                 npc.set_skill("hunting", skill + 1)
                 events.append(f"{npc.name} добыл дичь")
+
+                # === ТРАДИЦИИ: записываем успешную практику ===
+                tradition_event = self._record_practice_success("hunting")
+                if tradition_event:
+                    events.append(tradition_event)
 
                 # Попытка захватить землю при накоплении излишка (INT-002)
                 # theft_mod влияет на склонность к захвату
@@ -1436,6 +1577,10 @@ class Simulation:
                     trade_event = self._try_property_trade(npc, other)
                     if trade_event:
                         events.append(trade_event)
+                        # === ТРАДИЦИИ: записываем успешную практику ===
+                        tradition_event = self._record_practice_success("trading")
+                        if tradition_event:
+                            events.append(tradition_event)
 
                 # === Возможность поделиться ресурсами ===
                 # НОРМЫ: норма mutual_aid обязывает делиться
@@ -1456,6 +1601,10 @@ class Simulation:
                     if shared:
                         other.inventory.add(Resource(ResourceType.BERRIES, quantity=1))
                         events.append(f"{npc.name} поделился едой с {other.name}")
+                        # === ТРАДИЦИИ: записываем успешную практику ===
+                        tradition_event = self._record_practice_success("sharing")
+                        if tradition_event:
+                            events.append(tradition_event)
 
         return events
 
@@ -1486,6 +1635,14 @@ class Simulation:
         lines.append("Верования:")
         for belief in self.beliefs.beliefs.values():
             lines.append(f"  {belief.name}: {belief.get_adherent_count()} чел.")
+
+        # Традиции
+        tradition_stats = self.traditions.get_statistics()
+        if tradition_stats["total"] > 0:
+            lines.append("")
+            lines.append("Традиции:")
+            for tradition in self.traditions.traditions.values():
+                lines.append(f"  {tradition.name} ({tradition.tradition_type.value})")
 
         return "\n".join(lines)
 
