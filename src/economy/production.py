@@ -270,6 +270,12 @@ class Production:
 
     Обрабатывает производственные процессы,
     вычисляет эффективность и результаты труда.
+
+    Climate -> Production Link:
+    Климат влияет на продуктивность всех типов производства:
+    - Сезон определяет базовую доступность (некоторые активности сезонны)
+    - Погодные условия модифицируют эффективность
+    - Катаклизмы могут полностью блокировать производство
     """
 
     # Бонусы от технологий
@@ -282,6 +288,65 @@ class Production:
 
     # Текущий сезон (устанавливается симуляцией)
     current_season: str = ""
+
+    # Климатические модификаторы по типам деятельности
+    # Обновляются симуляцией из ClimateSystem.get_season_productivity()
+    climate_modifiers: Dict[str, float] = field(default_factory=lambda: {
+        "farming": 1.0,
+        "hunting": 1.0,
+        "gathering": 1.0,
+        "fishing": 1.0,
+    })
+
+    # Маппинг типов труда на климатические категории
+    _LABOR_TO_CLIMATE: Dict[LaborType, str] = field(default=None, repr=False)
+
+    def __post_init__(self):
+        """Инициализация после создания"""
+        # Маппинг типов труда на климатические категории
+        self._LABOR_TO_CLIMATE = {
+            LaborType.GATHERING: "gathering",
+            LaborType.HUNTING: "hunting",
+            LaborType.FISHING: "fishing",
+            LaborType.FARMING: "farming",
+            LaborType.HERDING: "farming",  # Скотоводство зависит от климата как фермерство
+            LaborType.CRAFTING: None,      # Ремесло не зависит напрямую от погоды
+            LaborType.BUILDING: None,      # Строительство слабо зависит от погоды
+            LaborType.COOKING: None,       # Готовка не зависит от погоды
+            LaborType.MINING: None,        # Добыча руды не зависит от погоды
+        }
+
+    def update_climate_modifiers(self, modifiers: Dict[str, float]) -> None:
+        """
+        Обновляет климатические модификаторы из ClimateSystem.
+
+        Вызывается симуляцией при обновлении климата.
+
+        Args:
+            modifiers: Словарь {тип_деятельности: модификатор}
+                      из ClimateSystem.get_season_productivity()
+        """
+        self.climate_modifiers.update(modifiers)
+
+    def get_climate_modifier(self, labor_type: LaborType) -> float:
+        """
+        Возвращает климатический модификатор для типа труда.
+
+        Args:
+            labor_type: Тип труда
+
+        Returns:
+            Модификатор производительности (0.0-2.0+)
+            1.0 = нормальные условия
+            <1.0 = неблагоприятные условия
+            >1.0 = благоприятные условия
+        """
+        climate_category = self._LABOR_TO_CLIMATE.get(labor_type)
+        if climate_category is None:
+            # Этот тип труда не зависит от климата
+            return 1.0
+
+        return self.climate_modifiers.get(climate_category, 1.0)
 
     def update(self, delta_hours: float = 1.0) -> List[str]:
         """
@@ -342,11 +407,23 @@ class Production:
                                worker_skill: int = 0,
                                has_tool: bool = False,
                                tool_quality: float = 1.0,
-                               weather_modifier: float = 1.0) -> float:
+                               weather_modifier: float = None) -> float:
         """
         Вычисляет производительность труда.
 
-        Возвращает множитель к базовому выходу.
+        Climate -> Production Link:
+        Если weather_modifier не указан явно, берётся из climate_modifiers
+        на основе типа труда (labor_type) метода производства.
+
+        Args:
+            method: Метод производства
+            worker_skill: Уровень навыка работника (0-100)
+            has_tool: Есть ли подходящий инструмент
+            tool_quality: Качество инструмента (0.0-1.0)
+            weather_modifier: Явный модификатор погоды (если None - из climate_modifiers)
+
+        Returns:
+            Множитель к базовому выходу (1.0 = 100% эффективности)
         """
         productivity = 1.0
 
@@ -359,7 +436,10 @@ class Production:
             tool_multiplier = 1.0 + (method.tool_bonus * tool_quality)
             productivity *= tool_multiplier
 
-        # Погодный модификатор
+        # Climate -> Production: климатический модификатор
+        # Если не передан явно, получаем из climate_modifiers на основе типа труда
+        if weather_modifier is None:
+            weather_modifier = self.get_climate_modifier(method.labor_type)
         productivity *= weather_modifier
 
         # Технологические бонусы
@@ -379,6 +459,10 @@ class Production:
         """
         Проверяет, можно ли произвести.
 
+        Climate -> Production Link:
+        - Сезонные ограничения проверяются через current_season
+        - Климатический модификатор проверяется: если 0, производство невозможно
+
         Возвращает (возможно, причина_если_нет)
         """
         # Проверяем технологии
@@ -395,10 +479,18 @@ class Production:
             except KeyError:
                 pass
 
-        # Проверяем сезон
-        if method.seasonal and season:
-            if season not in method.seasonal:
+        # Проверяем сезон (используем переданный или current_season)
+        check_season = season or self.current_season
+        if method.seasonal and check_season:
+            if check_season not in method.seasonal:
                 return False, f"только в сезоны: {', '.join(method.seasonal)}"
+
+        # Climate -> Production: проверяем, позволяет ли климат
+        climate_mod = self.get_climate_modifier(method.labor_type)
+        if climate_mod <= 0.0:
+            # Климатические условия полностью блокируют этот тип работы
+            climate_category = self._LABOR_TO_CLIMATE.get(method.labor_type, "работу")
+            return False, f"погода не позволяет {climate_category}"
 
         # Проверяем условия
         if method.requires_fire and not has_fire:

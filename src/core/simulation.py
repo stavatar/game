@@ -913,8 +913,11 @@ class Simulation:
             # === 2. БАЗИС (экономика) - обновляется ПЕРЕД надстройкой ===
             # ================================================================
 
-            # Производство (каждый час)
+            # Climate -> Production Link: обновляем климатические модификаторы
             self.production.current_season = self.climate.current_season.value
+            self.production.update_climate_modifiers(
+                self.climate.get_season_productivity()
+            )
             production_events = self.production.update(1.0)
             all_events.extend(production_events)
 
@@ -1534,8 +1537,8 @@ class Simulation:
         sharing_mod = self.beliefs.get_behavior_modifier(npc.id, "sharing")
 
         # Работа (базовый приоритет модифицируется work_ethic)
-        season = self.climate.current_season.value
-        productivity = self.climate.get_season_productivity()
+        # Climate -> Production: используем климатические модификаторы из production
+        productivity = self.production.climate_modifiers
 
         # work_ethic повышает порог для работы (трудолюбивые работают больше)
         work_threshold = 0.5 - work_ethic_mod * 0.3  # work_ethic=0.3 -> порог 0.41
@@ -1543,9 +1546,9 @@ class Simulation:
         # respect_nature увеличивает предпочтение собирательства над охотой
         gathering_bonus = respect_nature_mod * 0.2
 
-        if productivity.get("gathering", 0) + gathering_bonus > work_threshold:
+        if productivity.get("gathering", 1.0) + gathering_bonus > work_threshold:
             return "gather"
-        if productivity.get("hunting", 0) > work_threshold and npc.get_skill("hunting") > 0:
+        if productivity.get("hunting", 1.0) > work_threshold and npc.get_skill("hunting") > 0:
             return "hunt"
 
         # === Нормы влияют на социализацию ===
@@ -1810,7 +1813,8 @@ class Simulation:
             skill = npc.get_skill("gathering")
             amount = 1 + skill / 50 + random.random()
 
-            weather_mod = self.climate.current_weather.gathering_modifier
+            # Climate -> Production: используем климатический модификатор из production
+            weather_mod = self.production.climate_modifiers.get("gathering", 1.0)
             amount *= weather_mod
 
             # Верования влияют на собирательство:
@@ -1847,14 +1851,17 @@ class Simulation:
 
         elif action == "hunt":
             skill = npc.get_skill("hunting")
+            # Climate -> Production: климат влияет на шанс успеха охоты
+            hunting_climate_mod = self.production.climate_modifiers.get("hunting", 1.0)
             # work_ethic повышает шанс успешной охоты
-            success_chance = 0.3 + skill / 200 + work_ethic_mod * 0.1
+            success_chance = (0.3 + skill / 200 + work_ethic_mod * 0.1) * hunting_climate_mod
             success = random.random() < success_chance
 
             if success:
                 amount = 2 + skill / 30
                 # work_ethic дает бонус к добыче
-                amount *= (1.0 + work_ethic_mod * 0.15)
+                # Climate -> Production: климат влияет на добычу
+                amount *= (1.0 + work_ethic_mod * 0.15) * hunting_climate_mod
                 npc.inventory.add(Resource(ResourceType.MEAT, quantity=amount))
                 npc.set_skill("hunting", skill + 1)
                 events.append(f"{npc.name} добыл дичь")
