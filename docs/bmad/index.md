@@ -1,3 +1,15 @@
+---
+title: BMAD Documentation Index
+description: Навигационный центр BMAD-документации проекта симуляции развития общества
+keywords:
+  - BMAD
+  - документация
+  - навигация
+  - индекс
+  - методология
+lang: ru
+---
+
 # BMAD Documentation Index
 
 ## Базис и Надстройка - Симулятор Развития Общества
