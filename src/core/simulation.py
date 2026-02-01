@@ -237,6 +237,9 @@ class Simulation:
         self.event_bus = EventBus()
         self.event_log: List[str] = []
 
+        # Подписываемся на события
+        self._setup_event_subscribers()
+
         # Статистика
         self.total_days: int = 0
         self.generations: int = 1
@@ -272,6 +275,47 @@ class Simulation:
                 row.append(symbol)
             result.append(row)
         return result
+
+    def _setup_event_subscribers(self) -> None:
+        """Настраивает подписчиков на события"""
+        # Подписка на события смерти
+        self.event_bus.subscribe(EventType.NPC_DIED, self._on_npc_death)
+
+    def _on_npc_death(self, event: Event) -> None:
+        """
+        Обработчик события смерти NPC.
+
+        Выполняет:
+        - Обновление демографической статистики
+        - Освобождение собственности
+        - Обновление семейных связей
+        - Логирование
+        """
+        npc_id = event.actor_id
+        if not npc_id:
+            return
+
+        npc = self.npcs.get(npc_id)
+        if not npc:
+            return
+
+        # Записываем смерть в демографию
+        cause = event.data.get("cause", "unknown")
+        self.demography.record_death(event.year, cause)
+
+        # Освобождаем собственность умершего
+        self.ownership.release_all_property(npc_id)
+
+        # Обновляем семейные связи (супруг становится вдовцом)
+        if npc.spouse_id:
+            spouse = self.npcs.get(npc.spouse_id)
+            if spouse:
+                spouse.spouse_id = None
+
+        # Добавляем в лог событий
+        description = event.format_description()
+        if description:
+            self.event_log.append(description)
 
     def initialize(self) -> List[str]:
         """Инициализирует мир с начальной популяцией"""
