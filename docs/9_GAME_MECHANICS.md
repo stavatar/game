@@ -1048,5 +1048,5 @@ ECON-004: Инвестиции и воспроизводство
 - [`./docs/6_CULTURE_SYSTEM.md`](./6_CULTURE_SYSTEM.md) — Культурная система
 - [`./docs/7_NPC_SYSTEM.md`](./7_NPC_SYSTEM.md) — Система NPC и AI
 - [`./docs/8_WORLD_ENVIRONMENT.md`](./8_WORLD_ENVIRONMENT.md) — Мировая система
-- [`./README.md`](../README.md) — Главный файл документации
-- [`./GLOSSARY.md`](../GLOSSARY.md) — Глоссарий терминов
+- [README.md](../README.md) — Главный файл документации
+- [11_GLOSSARY.md](./11_GLOSSARY.md) — Глоссарий терминов
