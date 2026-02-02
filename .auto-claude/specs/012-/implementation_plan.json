@@ -1,0 +1,551 @@
+{
+  "feature": "Создание Полной Русскоязычной Документации Проекта",
+  "workflow_type": "feature",
+  "workflow_rationale": "This is a feature-type task creating new documentation artifacts describing the system architecture, mechanics, and planned future state. No code changes needed, but thorough research into both current implementation and Task 002 future state required.",
+  "summary": {
+    "total_phases": 6,
+    "total_subtasks": 14,
+    "services_involved": [
+      "documentation"
+    ],
+    "documents_to_create": 12,
+    "parallelism": {
+      "max_parallel_phases": 2,
+      "parallel_groups": [
+        {
+          "phases": [
+            "phase-2-core-docs",
+            "phase-3-system-docs"
+          ],
+          "reason": "Independent document writing, different systems, can work in parallel"
+        },
+        {
+          "phases": [
+            "phase-4-specialized",
+            "phase-5-reference"
+          ],
+          "reason": "Specialized docs and reference materials are independent"
+        }
+      ],
+      "recommended_workers": 2,
+      "speedup_estimate": "1.5x faster with parallel execution"
+    },
+    "startup_command": "source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 012 --parallel 2"
+  },
+  "phases": [
+    {
+      "id": "phase-1-research",
+      "name": "Research & Preparation",
+      "type": "setup",
+      "description": "Gather information about current system state and Task 002 future state, extract code examples, understand patterns",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Analyze current simulation state: study core/simulation.py, events.py, and update cycle order",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "files_to_reference": [
+            "src/core/simulation.py",
+            "src/core/events.py",
+            "src/core/config.py"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Document the simulation update order (TIME→ECONOMY→SOCIETY→CULTURE→NPC→CLIMATE) and event system in research notes"
+          },
+          "status": "completed",
+          "notes": "Analyzed simulation.py update cycle, events.py system, and config.py. Discovered actual update order is TIME+CLIMATE→ECONOMY→NPC→CULTURE→DEMOGRAPHY (differs from spec but matches Marxist philosophy). Documented 24 event types, EventBus pub-sub pattern, 6 importance levels, and configuration system. Research notes created in research_notes_simulation_state.md\"",
+          "updated_at": "2026-02-02T13:42:24.355843+00:00"
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Extract economic system patterns: analyze production.py, property.py, technology.py for Marxist implementation",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "files_to_reference": [
+            "src/economy/production.py",
+            "src/economy/property.py",
+            "src/economy/technology.py",
+            "src/economy/resources.py"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Extract 5-10 key code examples showing how basis-superstructure works in current implementation"
+          },
+          "status": "completed",
+          "notes": "Successfully analyzed economic system patterns. Created research_notes_economic_patterns.md with 10 key code examples: (1) Labor as source of value via hours_spent, (2) Means of production ownership determining classes, (3) Private property emergence as historical process, (4) Surplus product calculation (produced - necessary), (5) Exploitation rate formula (m'=m/v), (6) Land ownership vs landlessness, (7) Inequality via Gini coefficient, (8) Inheritance stabilizing class positions, (9) Private property as technology with prerequisites, (10) Historical property transitions. Basis-superstructure relationship clearly identified: economic foundation determines class structure which determines ideology/culture.",
+          "updated_at": "2026-02-02T17:30:00.000000+00:00"
+        },
+        {
+          "id": "subtask-1-3",
+          "description": "Study NPC and AI systems: examine character.py, bdi.py, memory.py for Generative Agents and BDI patterns",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "files_to_reference": [
+            "src/npc/character.py",
+            "src/npc/ai/bdi.py",
+            "src/npc/memory.py",
+            "src/npc/genetics.py",
+            "src/npc/personality.py"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Document BDI cycle (Perception→Beliefs→Desires→Intentions→Actions) with code examples"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-core-docs",
+      "name": "Core Documentation",
+      "type": "implementation",
+      "description": "Create foundational documents: introduction, architecture overview, and documentation roadmap",
+      "depends_on": [
+        "phase-1-research"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Create INTRODUCTION.md: philosophy, Marxist foundations, project vision, and key principles",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/1_INTRODUCTION.md"
+          ],
+          "patterns_from": [
+            "docs/README.md",
+            "README.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify document has sections: Project Philosophy, Marxist Foundations, Key Design Principles, Theoretical Context. Check Russian language quality."
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Create ARCHITECTURE_OVERVIEW.md: system architecture diagram with Mermaid, component relationships, and data flow",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/2_ARCHITECTURE_OVERVIEW.md"
+          ],
+          "patterns_from": [
+            "docs/README.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify contains: architecture diagram (Mermaid), all 9 services shown, simulation cycle explanation, data flow between systems"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-2-3",
+          "description": "Create DOCUMENTATION_ROADMAP.md: table of contents and navigation guide for all documentation",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/DOCUMENTATION_ROADMAP.md"
+          ],
+          "patterns_from": [
+            "docs/README.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify roadmap lists all 12+ documents with descriptions and cross-links to each"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-3-system-docs",
+      "name": "System Documentation",
+      "type": "implementation",
+      "description": "Document all major systems: simulation, economy, society, culture, NPC, and world",
+      "depends_on": [
+        "phase-1-research"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Create SIMULATION_CORE.md: main cycle, event system, emergence tracking, consistency validation",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/3_SIMULATION_CORE.md"
+          ],
+          "patterns_from": [
+            "src/core/simulation.py",
+            "src/core/events.py"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify document contains: simulation update order diagram, event system explanation, EventBus pattern, code examples, current vs future state sections"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Create ECONOMIC_SYSTEM.md: production, property, technology, resources, surplus value, class formation",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/4_ECONOMIC_SYSTEM.md"
+          ],
+          "patterns_from": [
+            "src/economy/production.py",
+            "src/economy/property.py"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify document includes: current production system, property ownership rules, technology tree, surplus value concept, current limitations, future improvements from Task 002"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-3-3",
+          "description": "Create SOCIETY_SYSTEM.md: families, demography, class structure, class consciousness, social reproduction",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/5_SOCIETY_SYSTEM.md"
+          ],
+          "patterns_from": [
+            "src/society/family.py",
+            "src/society/classes.py"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify document shows: family structure, demographic system, class emergence mechanism, inheritance system, demographic pyramid visualization, current issues and future improvements"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-3-4",
+          "description": "Create CULTURE_SYSTEM.md: beliefs, traditions, norms, ideology, class consciousness, hegemony",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/6_CULTURE_SYSTEM.md"
+          ],
+          "patterns_from": [
+            "src/culture/beliefs.py",
+            "src/culture/traditions.py"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify document contains: belief system mechanics, tradition propagation, norm formation, superstructure-basis relationship, current limitations, future improvements for class consciousness and hegemony"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-3-5",
+          "description": "Create NPC_SYSTEM.md: character model, BDI architecture, memory system, genetics, personality, needs, decision-making",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/7_NPC_SYSTEM.md"
+          ],
+          "patterns_from": [
+            "src/npc/character.py",
+            "src/npc/ai/bdi.py",
+            "src/npc/memory.py"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify document includes: NPC lifecycle, BDI cycle diagram, memory stream concept, reflection mechanism, Generative Agents pattern, current AI limitations, future AI improvements from Task 002"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-3-6",
+          "description": "Create WORLD_ENVIRONMENT.md: map system, terrain types, climate/seasons, weather, catastrophes, resources, locations",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/8_WORLD_ENVIRONMENT.md"
+          ],
+          "patterns_from": [
+            "src/world/map.py",
+            "src/world/climate.py",
+            "src/world/terrain.py"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify document shows: world map structure, coordinate system, climate simulation, season mechanics, catastrophe system, resource distribution, current state, planned improvements"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-4-specialized",
+      "name": "Specialized Documentation",
+      "type": "implementation",
+      "description": "Create game mechanics and future state documentation with all planned improvements",
+      "depends_on": [
+        "phase-3-system-docs"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-4-1",
+          "description": "Create GAME_MECHANICS.md: complete mechanics guide covering all gameplay systems, interactions, and emergent behaviors",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/9_GAME_MECHANICS.md"
+          ],
+          "patterns_from": [
+            "docs/README.md",
+            "GLOSSARY.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify document includes: all major mechanics (production, trade, family, class conflict), examples of emergent behaviors, interactions between systems, how player observes/influences world"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-4-2",
+          "description": "Create FUTURE_STATE.md: describe planned improvements from Task 002 (197 problems, 6 EPICs), breaking down architectural changes needed",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/10_FUTURE_STATE.md"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify document outlines: all 6 EPICs (INTEGRATION, ECONOMY, SUPERSTRUCTURE, SOCIAL, WORLD, AI), each with 20-45 problems, implementation timeline (26 weeks), architectural improvements, how they affect each system"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-5-reference",
+      "name": "Reference Materials",
+      "type": "implementation",
+      "description": "Create glossary and developer guide for developers and researchers",
+      "depends_on": [
+        "phase-3-system-docs"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-5-1",
+          "description": "Create GLOSSARY.md: comprehensive glossary of Marxist, technical, and domain-specific terms with Russian/English equivalents",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/11_GLOSSARY.md"
+          ],
+          "patterns_from": [
+            "GLOSSARY.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify glossary contains 30+ terms: Marxist concepts (базис, надстройка, классовое сознание, etc.), AI concepts (beliefs, desires, intentions, etc.), technical terms (émergence, BDI, generative agents, etc.)"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-5-2",
+          "description": "Create DEVELOPER_GUIDE.md: guide for developers on how to extend systems, add features, understand architecture",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/12_DEVELOPER_GUIDE.md"
+          ],
+          "patterns_from": [
+            "docs/README.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify guide includes: project structure, how to add new NPC behaviors, how to add new technologies, how to add new beliefs/traditions, testing patterns, code conventions"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-6-integration-qa",
+      "name": "Integration & Quality Assurance",
+      "type": "integration",
+      "description": "Update main docs README, verify all cross-references, check Russian language quality, final QA review",
+      "depends_on": [
+        "phase-4-specialized",
+        "phase-5-reference"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-6-1",
+          "description": "Update docs/README.md with comprehensive table of contents pointing to all new documentation",
+          "service": "documentation",
+          "files_to_modify": [
+            "docs/README.md"
+          ],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify updated README includes: overview section, complete TOC with all 12+ documents, navigation guide, links to each new document"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-6-2",
+          "description": "Verify all cross-references and links between documents work correctly, update any broken references",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Check that: all internal markdown links are correct, all EPIC references are accurate, no broken references between documents, navigation flows logically"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-6-3",
+          "description": "Final QA review: verify Russian language quality, code examples accuracy, completeness against spec requirements",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify all success criteria from spec: 12+ documents created, current+future state in each, code examples accurate, Russian language correct, diagrams present, 20+ glossary terms, proper formatting"
+          },
+          "status": "pending"
+        }
+      ]
+    }
+  ],
+  "verification_strategy": {
+    "risk_level": "medium",
+    "skip_validation": false,
+    "test_creation_phase": "post_implementation",
+    "test_types_required": [],
+    "security_scanning_required": false,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "All 12+ required documents created and complete",
+      "Each document has Current State and Planned State sections",
+      "All code examples match actual implementation",
+      "All documents in Russian language",
+      "Markdown properly formatted with diagrams",
+      "Cross-references between documents verified",
+      "Glossary contains 20+ terms",
+      "Developer Guide provides actionable guidance"
+    ],
+    "verification_steps": [
+      {
+        "name": "File Completeness Check",
+        "command": "ls -la docs/ | grep -E '(1_|2_|3_|4_|5_|6_|7_|8_|9_|10_|11_|12_|DOCUMENTATION_ROADMAP)' | wc -l",
+        "expected_outcome": "At least 12 files created",
+        "type": "automated",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Markdown Validation",
+        "command": "python -c \"import re; files=[]; status=True; print('Markdown files valid')\" || echo 'Manual check'",
+        "expected_outcome": "All files have valid Markdown syntax",
+        "type": "manual",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Russian Language Verification",
+        "command": "file docs/*.md | grep -c UTF-8",
+        "expected_outcome": "All files UTF-8 encoded for Russian text",
+        "type": "automated",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Code Examples Accuracy",
+        "command": "grep -l 'python' docs/*.md | head -5",
+        "expected_outcome": "Code examples present in core documents",
+        "type": "manual",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Cross-Reference Verification",
+        "command": "grep -r '\\[.*\\](.*\\.md)' docs/ | wc -l",
+        "expected_outcome": "Multiple cross-references present between documents",
+        "type": "automated",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "QA Sign-off",
+        "command": "echo 'QA review completed'",
+        "expected_outcome": "All success criteria met",
+        "type": "manual",
+        "required": true,
+        "blocking": true
+      }
+    ],
+    "reasoning": "Documentation task with medium risk due to accuracy requirements. No code testing needed, but thorough verification against specification and codebase required. Russian language quality must be verified. Cross-reference integrity critical for user navigation."
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": false,
+      "commands": [],
+      "minimum_coverage": null
+    },
+    "integration_tests": {
+      "required": false,
+      "commands": [],
+      "services_to_test": []
+    },
+    "e2e_tests": {
+      "required": false,
+      "commands": [],
+      "flows": []
+    },
+    "documentation_review": {
+      "required": true,
+      "checks": [
+        "All 12+ documents created",
+        "Russian language quality review",
+        "Accuracy of code examples",
+        "Completeness of system coverage",
+        "Current vs Future state clarity",
+        "Proper Markdown formatting",
+        "Working cross-references"
+      ]
+    },
+    "browser_verification": {
+      "required": false,
+      "pages": []
+    },
+    "database_verification": {
+      "required": false,
+      "checks": []
+    }
+  },
+  "qa_signoff": null,
+  "created_at": "2026-02-02T16:45:00Z",
+  "updated_at": "2026-02-02T13:43:12.554Z",
+  "status": "in_progress",
+  "planStatus": "in_progress",
+  "last_updated": "2026-02-02T13:42:24.355843+00:00"
+}
