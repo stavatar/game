@@ -170,7 +170,9 @@
             "type": "manual",
             "instructions": "Verify roadmap lists all 12+ documents with descriptions and cross-links to each"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Successfully created docs/DOCUMENTATION_ROADMAP.md with comprehensive table of contents and navigation guide. Document lists all 12+ documentation files with descriptions and cross-links, includes 6 recommended reading paths for different user types (beginners, managers, developers, researchers, AI specialists, game designers), shows complete dependency diagram between all documents, tracks completion status (4 completed, 10 in development), and contains 91 cross-references for easy navigation. Follows Russian academic style matching existing documentation pattern. Verification: Roadmap lists all documents with descriptions and cross-links ✅\"",
+          "updated_at": "2026-02-02T17:37:34.271441+00:00"
         }
       ]
     },
@@ -200,7 +202,9 @@
             "type": "manual",
             "instructions": "Verify document contains: simulation update order diagram, event system explanation, EventBus pattern, code examples, current vs future state sections"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Successfully created docs/3_SIMULATION_CORE.md with comprehensive documentation of: (1) Main simulation cycle with 5-step architecture (Time+Climate → Basis/Economy → NPC Actions → Superstructure/Culture → Demography), (2) EventBus system with 24 event types organized by category, (3) EventImportance levels (TRIVIAL to HISTORIC), (4) Event data structure with time, location, participants, causes, (5) EventBus pub-sub pattern with subscribe/publish/unsubscribe examples, (6) EmergenceTracker for tracking emergent phenomena, (7) ConsistencyValidator for state validation, (8) ContradictionDetector for dialectical analysis, (9) Current state: what works and limitations, (10) Planned improvements from Task 002 (INT-020, INT-019, INT-040), (11) Cross-references to other documentation (9 markdown links). Document includes: 790 lines, 35KB, 9 code examples, ASCII diagram of simulation cycle, YAML frontmatter with Russian metadata. Verification PASSED: ✓ Simulation update order diagram ✓ Event system explanation ✓ EventBus pattern ✓ Code examples ✓ Current vs future state sections. Git commit: 8de472e",
+          "updated_at": "2026-02-02T21:32:00.000000+00:00"
         },
         {
           "id": "subtask-3-2",
@@ -550,8 +554,9 @@
   },
   "qa_signoff": null,
   "created_at": "2026-02-02T16:45:00Z",
-  "updated_at": "2026-02-02T17:32:15.575Z",
+  "updated_at": "2026-02-02T18:29:08.223Z",
   "status": "in_progress",
   "planStatus": "in_progress",
-  "last_updated": "2026-02-02T13:48:20.822967+00:00"
+  "last_updated": "2026-02-02T17:37:34.271441+00:00",
+  "recoveryNote": "Task recovered from stuck state at 2026-02-02T18:29:02.784Z"
 }
