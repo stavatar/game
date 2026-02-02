@@ -8,65 +8,78 @@ COMPLETED SUBTASKS:
 ✓ subtask-2-2: Create ARCHITECTURE_OVERVIEW.md
 ✓ subtask-2-3: Create DOCUMENTATION_ROADMAP.md
 ✓ subtask-3-1: Create SIMULATION_CORE.md
+✓ subtask-3-2: Create ECONOMIC_SYSTEM.md
 
 CURRENT STATUS:
-   Subtask ID: subtask-3-1
+   Subtask ID: subtask-3-2
    Phase: System Documentation (Phase 3)
    Service: documentation
-   Description: Create SIMULATION_CORE.md: main cycle, event system, emergence tracking, consistency validation
+   Description: Create ECONOMIC_SYSTEM.md: production, property, technology, resources, surplus value, class formation
 
 IMPLEMENTATION COMPLETED:
-   File Created: ./docs/3_SIMULATION_CORE.md (35 KB, 790 lines)
-   
+   File Created: ./docs/4_ECONOMIC_SYSTEM.md (52 KB, 997 lines)
+
    Document Features:
    ✓ YAML frontmatter with Russian metadata (title, description, keywords, lang)
-   ✓ Section 1: Main simulation cycle
-     - 1.1: Marxist architecture with ASCII diagram
-     - 1.2: 5-step update order (Time+Climate → Basis → NPC → Superstructure → Demography)
-     - 1.3: Code example of main update() method
-   
-   ✓ Section 2: Event System
-     - 2.1: EventBus overview and rationale
-     - 2.2: 24 event types organized by 9 categories
-     - 2.3: EventImportance levels (TRIVIAL to HISTORIC)
-     - 2.4: Event data structure with code examples
-     - 2.5: EventBus pub-sub pattern (subscribe, publish, unsubscribe)
-     - 2.6: Two practical usage examples
-   
-   ✓ Section 3: Emergence Tracking
-     - 3.1: EmergenceTracker description
-     - 3.2: EmergenceMetrics with example code
-     - 3.3: Implementation example with yearly tracking
-   
-   ✓ Section 4: Consistency Validation
-     - 4.1: Overview of consistency checks
-     - 4.2: ConsistencyLevel enum
-     - 4.3: Detailed validation code example
-     - 4.4: Periodic validation approach
-   
-   ✓ Section 5: Contradiction Detection
-     - 5.1: ContradictionDetector overview
-     - 5.2: ContradictionMetrics structure
-     - 5.3: Dialectical analysis code example
-   
-   ✓ Section 6: Current State (As-Is)
-     - 6.1: What works (5 ✓ items)
-     - 6.2: Problems and limitations (4 ❌ issues with INT references)
-   
-   ✓ Section 7: Planned State (To-Be)
-     - 7.1: INT-020 - EventBus Activation
-     - 7.2: INT-019 - Dialectical Analysis
-     - 7.3: INT-040 - Emergence Tracking
-     - 7.4: Integration diagram
-     - References to FUTURE_STATE.md
-   
-   ✓ Section 8: Cross-references
-     - 9 markdown links to related documents
-     - Proper navigation between docs
-   
-   ✓ Section 9: Conclusion
-     - Summary of key concepts
-     - Link to future improvements
+   ✓ Section 1: Production System (Система Производства)
+     - 1.1: Philosophical foundation - Labor as source of value
+     - 1.2: Production structure - ProductionMethod, LaborType enum
+     - 1.3: 9 labor types with examples (gathering, hunting, fishing, farming, etc.)
+     - 1.4: Efficiency calculation formula with example
+     - 1.5: Climate and terrain integration
+
+   ✓ Section 2: Property System (Система Собственности)
+     - 2.1: Marxist foundation - relation to means of production determines class
+     - 2.2: 4 property types (communal, personal, private, family)
+     - 2.3: 6 property categories (land, tools, livestock, buildings, resources, knowledge)
+     - 2.4: 6 ownership transition types with examples
+     - 2.5: Example - private property emergence in primitive commune
+     - 2.6: Gini coefficient calculation for inequality measurement
+
+   ✓ Section 3: Technology Tree (Технологии и Развитие)
+     - 3.1: Philosophy - technology as development of productive forces
+     - 3.2: 5 technological eras (primitive to early medieval)
+     - 3.3: Technology prerequisites and discovery mechanics
+     - 3.4: Example - agriculture discovery process
+
+   ✓ Section 4: Resources (Система Ресурсов)
+     - 4.1: Classification - 6 resource categories
+     - 4.2: 35+ resource types with examples
+     - 4.3: Resource circulation through economy
+
+   ✓ Section 5: Surplus Value (Прибавочная Стоимость)
+     - 5.1: Marxist theory - necessary vs surplus product
+     - 5.2: Day-in-life example showing exploitation
+     - 5.3: Exploitation calculation (m'/v formula)
+     - 5.4: Exploitation mechanism in game
+
+   ✓ Section 6: Class Formation (Образование Классов)
+     - 6.1: Automatic class emergence from ownership
+     - 6.2: Three class types: Bourgeoisie, Proletariat, Peasantry
+     - 6.3: Class dynamics - upward and downward mobility
+     - 6.4: Class determination algorithm code
+
+   ✓ Section 7: Current State (As-Is)
+     - 7.1: What works (21 features listed across 5 categories)
+     - 7.2: Current limitations (14 specific limitations documented)
+
+   ✓ Section 8: Planned Improvements (To-Be)
+     - 8.1: EPIC-ECONOMY (39 problems) with 5 subsystems
+     - 8.2: EPIC-INTEGRATION and EPIC-SOCIAL connections
+     - 8.3: Dependency graph for improvements
+
+   ✓ Section 9: Usage Examples
+     - 9.1: Example - from hunter to capitalist (20 year arc)
+     - 9.2: Example - class conflict in village
+
+   ✓ Section 10: Integration with Other Systems
+     - 10.1: Production → Society links
+     - 10.2: Production → Culture links (ideology)
+     - 10.3: Production → NPC AI links (BDI desires)
+
+   ✓ Section 11: Cross-references
+     - 7 markdown links to related documents
+     - Code references to source files
 
 Code Quality:
    - No console.log/debug statements ✓
@@ -76,30 +89,33 @@ Code Quality:
    - Academic style matching existing docs ✓
    - Cross-links properly formatted ✓
    - UTF-8 encoding verified ✓
-   - 9 code examples with proper syntax highlighting ✓
-   - 1 ASCII diagram of simulation cycle ✓
-   - 9 cross-references to other documentation ✓
+   - 49 code examples with proper syntax highlighting ✓
+   - 2 detailed ASCII diagrams ✓
+   - 7 cross-references to other documentation ✓
 
 VERIFICATION RESULTS:
-   ✓ Simulation update order diagram - PASS
-   ✓ Event system explanation - PASS
-   ✓ EventBus pattern - PASS
-   ✓ Code examples (5+ required) - PASS (9 provided)
-   ✓ Current vs future state sections - PASS
+   ✓ Production system documented - PASS (Section 1, 9 labor types, 60+ methods)
+   ✓ Property ownership rules - PASS (Section 2, 4 types, 6 categories, 6 transitions)
+   ✓ Technology tree - PASS (Section 3, 5 eras, 40+ techs, discovery mechanics)
+   ✓ Surplus value concept - PASS (Section 5, Marxist formula, exploitation rate)
+   ✓ Class formation - PASS (Section 6, Bourgeoisie/Proletariat/Peasantry with algorithm)
+   ✓ Current limitations - PASS (Section 7.2, 14 specific limitations)
+   ✓ Future improvements - PASS (Section 8, 5 EPICs from Task 002)
    ✓ YAML frontmatter - PASS
-   ✓ Cross-references (5+ required) - PASS (9 provided)
+   ✓ Code examples (49 provided) - PASS
+   ✓ Cross-references (7 provided) - PASS
    ✓ Russian language quality - PASS
 
-   OVERALL: 8/8 checks PASSED ✓
+   OVERALL: 10/10 checks PASSED ✓
 
 SPECIFICATION COMPLIANCE:
-   Requirement: "Verify document contains: simulation update order diagram, event system explanation, EventBus pattern, code examples, current vs future state sections"
-   Status: ✓ FULLY COMPLIANT - All 5 required elements present
+   Requirement: "Verify document includes: current production system, property ownership rules, technology tree, surplus value concept, current limitations, future improvements from Task 002"
+   Status: ✓ FULLY COMPLIANT - All 6 required elements present and comprehensive
 
 Git Commit:
-   Commit ID: 8de472e
-   Message: "auto-claude: subtask-3-1 - Create SIMULATION_CORE.md: main cycle, event system, emergence tracking, consistency validation"
-   Files Changed: 1 file added (+790 lines)
+   Commit ID: d24d666
+   Message: "auto-claude: subtask-3-2 - Create ECONOMIC_SYSTEM.md: production, property, technology, resources, surplus value, class formation"
+   Files Changed: 1 file added (+997 lines)
    Status: ✓ COMMITTED TO GIT
 
 Documentation Map Update:
@@ -107,10 +123,10 @@ Documentation Map Update:
    • 1_INTRODUCTION.md ✓ (2026-02-02)
    • 2_ARCHITECTURE_OVERVIEW.md ✓ (2026-02-02)
    • 3_SIMULATION_CORE.md ✓ (2026-02-02)
+   • 4_ECONOMIC_SYSTEM.md ✓ (2026-02-02)
    • DOCUMENTATION_ROADMAP.md ✓ (2026-02-02)
-   
+
    Pending Documents:
-   • 4_ECONOMIC_SYSTEM.md ⏳
    • 5_SOCIETY_SYSTEM.md ⏳
    • 6_CULTURE_SYSTEM.md ⏳
    • 7_NPC_SYSTEM.md ⏳
@@ -121,6 +137,6 @@ Documentation Map Update:
    • 12_DEVELOPER_GUIDE.md ⏳
 
 NEXT STEPS:
-   Subtask-3-2: Create ECONOMIC_SYSTEM.md
+   Subtask-3-3: Create SOCIETY_SYSTEM.md
    Status: READY FOR IMPLEMENTATION
 
