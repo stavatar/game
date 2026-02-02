@@ -334,7 +334,9 @@
             "type": "manual",
             "instructions": "Verify document includes: all major mechanics (production, trade, family, class conflict), examples of emergent behaviors, interactions between systems, how player observes/influences world"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Successfully created docs/9_GAME_MECHANICS.md (1052 lines, 54KB) with comprehensive game mechanics documentation covering: (1) Production mechanics and cycles, (2) Emergent class formation from ownership, (3) Trading systems, (4) Family mechanics and inheritance, (5) Class conflicts and consciousness development, (6) Cultural mechanics and ideology, (7) Emergent behaviors (5+ detailed examples), (8) Time rhythms and cycles, (9) System interactions, (10) Player observation and influence mechanisms, (11) Current vs future state, (12) 3 game scenario examples. Document includes 13 major sections, 1052 lines, professional Russian language, code examples, cross-references. Verification PASSED: ✓ All major mechanics ✓ Emergent behaviors ✓ System interactions ✓ Player observation. Git commit: 5daf184",
+          "updated_at": "2026-02-02T22:15:00.000000+00:00"
         },
         {
           "id": "subtask-4-2",
@@ -562,7 +564,7 @@
   },
   "qa_signoff": null,
   "created_at": "2026-02-02T16:45:00Z",
-  "updated_at": "2026-02-02T19:05:52.777Z",
+  "updated_at": "2026-02-02T19:11:50.990Z",
   "status": "in_progress",
   "planStatus": "in_progress",
   "last_updated": "2026-02-02T17:37:34.271441+00:00",
