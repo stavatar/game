@@ -291,6 +291,25 @@ class DemographySystem:
         else:
             return "Стабильные условия."
 
+    def record_death(self, year: int, cause: str = "") -> None:
+        """
+        Записывает смерть в статистику.
+
+        Args:
+            year: Год смерти
+            cause: Причина смерти (опционально)
+        """
+        self.deaths_this_year += 1
+
+    def record_birth(self, year: int) -> None:
+        """
+        Записывает рождение в статистику.
+
+        Args:
+            year: Год рождения
+        """
+        self.births_this_year += 1
+
     def record_year_end(self, year: int, population: int) -> None:
         """Записывает статистику на конец года"""
         self.population_history.append((year, population))

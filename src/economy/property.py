@@ -328,6 +328,46 @@ class OwnershipSystem:
 
         return inherited
 
+    def release_property(self, owner_id: str, year: int) -> List[str]:
+        """
+        Освобождает всю собственность владельца (переводит в общинную).
+
+        Используется когда NPC умирает без наследников.
+
+        Args:
+            owner_id: ID владельца, чья собственность освобождается
+            year: Год освобождения
+
+        Returns:
+            Список ID освобождённой собственности
+        """
+        released = []
+
+        properties = self.get_owner_properties(owner_id)
+        for prop in properties:
+            # Переводим в общинную собственность
+            old_owner = prop.owner_id
+            prop.owner_type = PropertyType.COMMUNAL
+            prop.owner_id = None
+            prop.acquisition_year = year
+            prop.acquisition_method = "освобождена"
+
+            # Удаляем из индекса владельца
+            if old_owner and old_owner in self.owner_index:
+                self.owner_index[old_owner].discard(prop.property_id)
+                if not self.owner_index[old_owner]:
+                    del self.owner_index[old_owner]
+
+            # Записываем в историю
+            self.transfer_history.append((
+                prop.property_id, old_owner or "никто", "община", year,
+                OwnershipTransition.COMMUNALIZATION
+            ))
+
+            released.append(prop.property_id)
+
+        return released
+
     def get_statistics(self) -> Dict[str, any]:
         """Возвращает статистику собственности"""
         distribution = self.get_property_distribution()

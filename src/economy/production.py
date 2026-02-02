@@ -270,21 +270,327 @@ class Production:
 
     Обрабатывает производственные процессы,
     вычисляет эффективность и результаты труда.
+
+    Climate -> Production Link:
+    Климат влияет на продуктивность всех типов производства:
+    - Сезон определяет базовую доступность (некоторые активности сезонны)
+    - Погодные условия модифицируют эффективность
+    - Катаклизмы могут полностью блокировать производство
+
+    Territory -> Economics Link:
+    Территория влияет на экономическую деятельность:
+    - Плодородность тайла влияет на земледелие и собирательство
+    - Тип территории определяет доступные ресурсы
+    - Наличие воды влияет на рыболовство
+    - Лес улучшает охоту и собирательство
     """
 
     # Бонусы от технологий
     tech_bonuses: Dict[str, float] = field(default_factory=dict)
+
+    # Статистика производства
+    total_production_hours: float = 0.0
+    total_resources_produced: Dict[str, float] = field(default_factory=dict)
+    total_resources_consumed: Dict[str, float] = field(default_factory=dict)
+
+    # Текущий сезон (устанавливается симуляцией)
+    current_season: str = ""
+
+    # Климатические модификаторы по типам деятельности
+    # Обновляются симуляцией из ClimateSystem.get_season_productivity()
+    climate_modifiers: Dict[str, float] = field(default_factory=lambda: {
+        "farming": 1.0,
+        "hunting": 1.0,
+        "gathering": 1.0,
+        "fishing": 1.0,
+    })
+
+    # Маппинг типов труда на климатические категории
+    _LABOR_TO_CLIMATE: Dict[LaborType, str] = field(default=None, repr=False)
+
+    # Territory -> Economics: маппинг типов территории на модификаторы производства
+    # Формат: {terrain_name: {labor_type: modifier}}
+    _TERRAIN_MODIFIERS: Dict[str, Dict[str, float]] = field(default=None, repr=False)
+
+    def __post_init__(self):
+        """Инициализация после создания"""
+        # Маппинг типов труда на климатические категории
+        self._LABOR_TO_CLIMATE = {
+            LaborType.GATHERING: "gathering",
+            LaborType.HUNTING: "hunting",
+            LaborType.FISHING: "fishing",
+            LaborType.FARMING: "farming",
+            LaborType.HERDING: "farming",  # Скотоводство зависит от климата как фермерство
+            LaborType.CRAFTING: None,      # Ремесло не зависит напрямую от погоды
+            LaborType.BUILDING: None,      # Строительство слабо зависит от погоды
+            LaborType.COOKING: None,       # Готовка не зависит от погоды
+            LaborType.MINING: None,        # Добыча руды не зависит от погоды
+        }
+
+        # Territory -> Economics: модификаторы по типам территории
+        # Ключ - название территории (из TerrainType), значение - {labor_type: modifier}
+        self._TERRAIN_MODIFIERS = {
+            "WATER": {
+                "gathering": 0.0,   # Нельзя собирать в воде
+                "hunting": 0.0,     # Нельзя охотиться в воде
+                "fishing": 2.0,     # Отличная рыбалка
+                "farming": 0.0,     # Нельзя фермить в воде
+                "mining": 0.0,      # Нельзя добывать в воде
+            },
+            "GRASSLAND": {
+                "gathering": 1.0,   # Базовое собирательство
+                "hunting": 1.2,     # Хорошая охота (видно добычу)
+                "fishing": 0.0,     # Нет воды
+                "farming": 1.3,     # Отличное фермерство
+                "mining": 0.5,      # Мало камней
+            },
+            "FOREST": {
+                "gathering": 1.5,   # Богатое собирательство (ягоды, грибы)
+                "hunting": 1.3,     # Хорошая охота (много дичи)
+                "fishing": 0.0,     # Нет воды
+                "farming": 0.6,     # Слабое фермерство (тень)
+                "mining": 0.3,      # Мало камней
+            },
+            "DENSE_FOREST": {
+                "gathering": 1.8,   # Очень богатое собирательство
+                "hunting": 1.0,     # Обычная охота (сложно преследовать)
+                "fishing": 0.0,     # Нет воды
+                "farming": 0.2,     # Почти невозможно фермить
+                "mining": 0.2,      # Очень мало камней
+            },
+            "HILL": {
+                "gathering": 0.7,   # Слабое собирательство
+                "hunting": 0.9,     # Немного хуже охота
+                "fishing": 0.0,     # Нет воды
+                "farming": 0.5,     # Терассное земледелие сложнее
+                "mining": 1.5,      # Хорошая добыча (камни, руда)
+            },
+            "MOUNTAIN": {
+                "gathering": 0.3,   # Очень слабое собирательство
+                "hunting": 0.5,     # Сложная охота
+                "fishing": 0.0,     # Нет воды
+                "farming": 0.0,     # Невозможно фермить
+                "mining": 2.0,      # Отличная добыча
+            },
+            "SWAMP": {
+                "gathering": 1.2,   # Хорошее собирательство (ягоды, травы)
+                "hunting": 0.6,     # Сложная охота
+                "fishing": 1.3,     # Хорошая рыбалка
+                "farming": 0.1,     # Почти невозможно фермить
+                "mining": 0.0,      # Нельзя добывать
+            },
+            "DESERT": {
+                "gathering": 0.4,   # Слабое собирательство
+                "hunting": 0.8,     # Охота возможна (кочевники)
+                "fishing": 0.0,     # Нет воды
+                "farming": 0.3,     # Сложное фермерство (нет воды)
+                "mining": 0.8,      # Есть камни
+            },
+        }
+
+    def update_climate_modifiers(self, modifiers: Dict[str, float]) -> None:
+        """
+        Обновляет климатические модификаторы из ClimateSystem.
+
+        Вызывается симуляцией при обновлении климата.
+
+        Args:
+            modifiers: Словарь {тип_деятельности: модификатор}
+                      из ClimateSystem.get_season_productivity()
+        """
+        self.climate_modifiers.update(modifiers)
+
+    def get_climate_modifier(self, labor_type: LaborType) -> float:
+        """
+        Возвращает климатический модификатор для типа труда.
+
+        Args:
+            labor_type: Тип труда
+
+        Returns:
+            Модификатор производительности (0.0-2.0+)
+            1.0 = нормальные условия
+            <1.0 = неблагоприятные условия
+            >1.0 = благоприятные условия
+        """
+        climate_category = self._LABOR_TO_CLIMATE.get(labor_type)
+        if climate_category is None:
+            # Этот тип труда не зависит от климата
+            return 1.0
+
+        return self.climate_modifiers.get(climate_category, 1.0)
+
+    def get_terrain_modifier(
+        self,
+        terrain_name: str,
+        labor_type: LaborType,
+        fertility: float = 1.0
+    ) -> float:
+        """
+        Territory -> Economics Link:
+        Возвращает модификатор производительности для типа территории.
+
+        Модификатор зависит от:
+        - Базового модификатора для данного типа территории и труда
+        - Плодородности тайла (для земледелия и собирательства)
+
+        Args:
+            terrain_name: Название типа территории (из TerrainType.name)
+            labor_type: Тип труда
+            fertility: Плодородность тайла (0.0-1.0)
+
+        Returns:
+            Модификатор производительности (0.0-2.0+)
+            0.0 = деятельность невозможна на этой территории
+            1.0 = нормальные условия
+            >1.0 = благоприятные условия
+        """
+        # Получаем модификаторы для этого типа территории
+        terrain_mods = self._TERRAIN_MODIFIERS.get(terrain_name, {})
+
+        # Определяем категорию труда для поиска модификатора
+        labor_category = self._LABOR_TO_CLIMATE.get(labor_type)
+        if labor_category is None:
+            # Этот тип труда (ремесло, готовка и т.п.) не зависит от территории
+            return 1.0
+
+        # Базовый модификатор территории
+        base_modifier = terrain_mods.get(labor_category, 1.0)
+
+        # Плодородность влияет на земледелие и собирательство
+        if labor_type in [LaborType.FARMING, LaborType.GATHERING]:
+            # Применяем модификатор плодородности
+            # fertility 0.0 -> 0.5x, fertility 1.0 -> 1.5x
+            fertility_modifier = 0.5 + fertility
+            base_modifier *= fertility_modifier
+
+        return base_modifier
+
+    def get_terrain_resources(self, terrain_name: str) -> List[str]:
+        """
+        Territory -> Economics Link:
+        Возвращает список доступных ресурсов для данного типа территории.
+
+        Args:
+            terrain_name: Название типа территории
+
+        Returns:
+            Список названий ресурсов, доступных на этой территории
+        """
+        # Маппинг типов территории на доступные ресурсы
+        # Основано на base_resources из TerrainProperties
+        terrain_resources = {
+            "WATER": ["fish", "water"],
+            "GRASSLAND": ["berries", "meat", "fiber"],
+            "FOREST": ["wood", "meat", "berries", "mushrooms"],
+            "DENSE_FOREST": ["wood", "meat", "berries", "mushrooms", "honey"],
+            "HILL": ["stone", "ore", "berries"],
+            "MOUNTAIN": ["stone", "ore", "gems"],
+            "SWAMP": ["berries", "herbs", "fish"],
+            "DESERT": ["meat", "fiber"],
+        }
+
+        return terrain_resources.get(terrain_name, ["berries"])
+
+    def is_resource_available(self, terrain_name: str, resource_name: str) -> bool:
+        """
+        Territory -> Economics Link:
+        Проверяет, доступен ли ресурс на данной территории.
+
+        Args:
+            terrain_name: Название типа территории
+            resource_name: Название ресурса (в нижнем регистре)
+
+        Returns:
+            True если ресурс доступен на этой территории
+        """
+        available = self.get_terrain_resources(terrain_name)
+        return resource_name.lower() in available
+
+    def update(self, delta_hours: float = 1.0) -> List[str]:
+        """
+        Обновляет систему производства.
+
+        Вызывается из главного цикла симуляции.
+        Обрабатывает глобальные производственные процессы.
+
+        Args:
+            delta_hours: Количество часов с последнего обновления
+
+        Returns:
+            Список событий производства
+        """
+        events = []
+
+        # Учитываем время производства
+        self.total_production_hours += delta_hours
+
+        return events
+
+    def record_production(self, result: 'ProductionResult') -> None:
+        """
+        Записывает результат производства в статистику.
+
+        Args:
+            result: Результат производства
+        """
+        if not result.success:
+            return
+
+        for resource, amount in result.resources_produced.items():
+            self.total_resources_produced[resource] = (
+                self.total_resources_produced.get(resource, 0.0) + amount
+            )
+
+        for resource, amount in result.resources_consumed.items():
+            self.total_resources_consumed[resource] = (
+                self.total_resources_consumed.get(resource, 0.0) + amount
+            )
+
+    def get_statistics(self) -> Dict:
+        """
+        Возвращает статистику производства.
+
+        Returns:
+            Словарь со статистикой
+        """
+        return {
+            "total_hours": self.total_production_hours,
+            "produced": dict(self.total_resources_produced),
+            "consumed": dict(self.total_resources_consumed),
+            "tech_bonuses": dict(self.tech_bonuses),
+        }
 
     def calculate_productivity(self,
                                method: ProductionMethod,
                                worker_skill: int = 0,
                                has_tool: bool = False,
                                tool_quality: float = 1.0,
-                               weather_modifier: float = 1.0) -> float:
+                               weather_modifier: float = None,
+                               terrain_name: str = None,
+                               terrain_fertility: float = None) -> float:
         """
         Вычисляет производительность труда.
 
-        Возвращает множитель к базовому выходу.
+        Climate -> Production Link:
+        Если weather_modifier не указан явно, берётся из climate_modifiers
+        на основе типа труда (labor_type) метода производства.
+
+        Territory -> Economics Link:
+        Если terrain_name указан, применяется модификатор территории.
+        terrain_fertility используется для земледелия и собирательства.
+
+        Args:
+            method: Метод производства
+            worker_skill: Уровень навыка работника (0-100)
+            has_tool: Есть ли подходящий инструмент
+            tool_quality: Качество инструмента (0.0-1.0)
+            weather_modifier: Явный модификатор погоды (если None - из climate_modifiers)
+            terrain_name: Название типа территории (если None - не применяется)
+            terrain_fertility: Плодородность тайла (0.0-1.0, если None - 0.5)
+
+        Returns:
+            Множитель к базовому выходу (1.0 = 100% эффективности)
         """
         productivity = 1.0
 
@@ -297,8 +603,19 @@ class Production:
             tool_multiplier = 1.0 + (method.tool_bonus * tool_quality)
             productivity *= tool_multiplier
 
-        # Погодный модификатор
+        # Climate -> Production: климатический модификатор
+        # Если не передан явно, получаем из climate_modifiers на основе типа труда
+        if weather_modifier is None:
+            weather_modifier = self.get_climate_modifier(method.labor_type)
         productivity *= weather_modifier
+
+        # Territory -> Economics: модификатор территории
+        if terrain_name is not None:
+            fertility = terrain_fertility if terrain_fertility is not None else 0.5
+            terrain_modifier = self.get_terrain_modifier(
+                terrain_name, method.labor_type, fertility
+            )
+            productivity *= terrain_modifier
 
         # Технологические бонусы
         for tech in method.required_technologies:
@@ -313,9 +630,19 @@ class Production:
                     known_technologies: set,
                     season: str = None,
                     has_fire: bool = False,
-                    near_water: bool = False) -> Tuple[bool, str]:
+                    near_water: bool = False,
+                    terrain_name: str = None,
+                    terrain_fertility: float = None) -> Tuple[bool, str]:
         """
         Проверяет, можно ли произвести.
+
+        Climate -> Production Link:
+        - Сезонные ограничения проверяются через current_season
+        - Климатический модификатор проверяется: если 0, производство невозможно
+
+        Territory -> Economics Link:
+        - Тип территории может блокировать производство
+        - Например: рыбалка требует воды, фермерство требует плодородной земли
 
         Возвращает (возможно, причина_если_нет)
         """
@@ -333,10 +660,30 @@ class Production:
             except KeyError:
                 pass
 
-        # Проверяем сезон
-        if method.seasonal and season:
-            if season not in method.seasonal:
+        # Проверяем сезон (используем переданный или current_season)
+        check_season = season or self.current_season
+        if method.seasonal and check_season:
+            if check_season not in method.seasonal:
                 return False, f"только в сезоны: {', '.join(method.seasonal)}"
+
+        # Climate -> Production: проверяем, позволяет ли климат
+        climate_mod = self.get_climate_modifier(method.labor_type)
+        if climate_mod <= 0.0:
+            # Климатические условия полностью блокируют этот тип работы
+            climate_category = self._LABOR_TO_CLIMATE.get(method.labor_type, "работу")
+            return False, f"погода не позволяет {climate_category}"
+
+        # Territory -> Economics: проверяем, позволяет ли территория
+        if terrain_name is not None:
+            fertility = terrain_fertility if terrain_fertility is not None else 0.5
+            terrain_mod = self.get_terrain_modifier(
+                terrain_name, method.labor_type, fertility
+            )
+            if terrain_mod <= 0.0:
+                # Территория не позволяет этот тип работы
+                labor_name = method.labor_type.value
+                terrain_readable = terrain_name.lower().replace("_", " ")
+                return False, f"{labor_name} невозможно на территории: {terrain_readable}"
 
         # Проверяем условия
         if method.requires_fire and not has_fire:
@@ -479,3 +826,133 @@ class Production:
             return 0.0
 
         return surplus / total_produced
+
+    # ===================================================================
+    # Technology -> Production Link
+    # ===================================================================
+
+    def update_tech_bonuses(self, known_technologies: set) -> None:
+        """
+        Technology -> Production Link:
+        Обновляет бонусы производства на основе известных технологий.
+
+        Агрегирует production_bonus из всех известных технологий
+        в self.tech_bonuses для использования в calculate_productivity().
+
+        Вызывается симуляцией при изменении списка технологий.
+
+        Args:
+            known_technologies: Множество ID известных технологий
+        """
+        # Импортируем здесь, чтобы избежать циклических импортов
+        from .technology import TECHNOLOGIES
+
+        # Сбрасываем бонусы
+        self.tech_bonuses.clear()
+
+        # Собираем бонусы от всех известных технологий
+        for tech_id in known_technologies:
+            tech = TECHNOLOGIES.get(tech_id)
+            if tech and tech.production_bonus:
+                for bonus_type, bonus_value in tech.production_bonus.items():
+                    current = self.tech_bonuses.get(bonus_type, 0.0)
+                    self.tech_bonuses[bonus_type] = current + bonus_value
+
+    def get_labor_tech_bonus(self, labor_type: LaborType) -> float:
+        """
+        Technology -> Production Link:
+        Возвращает суммарный технологический бонус для типа труда.
+
+        Маппит LaborType на категории бонусов из technology.production_bonus
+        и возвращает агрегированный бонус.
+
+        Args:
+            labor_type: Тип труда
+
+        Returns:
+            Множитель бонуса (0.0 = нет бонуса, 0.5 = +50% к производительности)
+        """
+        # Маппинг типов труда на категории бонусов в технологиях
+        labor_to_bonus_category = {
+            LaborType.GATHERING: "gathering",
+            LaborType.HUNTING: "hunting",
+            LaborType.FISHING: "fishing",
+            LaborType.FARMING: "farming",
+            LaborType.HERDING: "herding",
+            LaborType.CRAFTING: "smithing",  # Ремесло использует smithing бонус
+            LaborType.BUILDING: "shelter",   # Строительство использует shelter бонус
+            LaborType.COOKING: "cooking",
+            LaborType.MINING: "mining",
+        }
+
+        category = labor_to_bonus_category.get(labor_type)
+        if category is None:
+            return 0.0
+
+        # Возвращаем бонус для этой категории
+        return self.tech_bonuses.get(category, 0.0)
+
+    def get_activity_tech_bonus(self, activity_name: str) -> float:
+        """
+        Technology -> Production Link:
+        Возвращает технологический бонус для названия активности.
+
+        Удобный метод для симуляции, где активности именуются строками
+        (gather, hunt, fish, etc.)
+
+        Args:
+            activity_name: Название активности (gather, hunt, fish, farm, etc.)
+
+        Returns:
+            Множитель бонуса (0.0 = нет бонуса, 0.5 = +50%)
+        """
+        # Маппинг названий активностей на категории бонусов
+        activity_to_bonus = {
+            "gather": "gathering",
+            "gathering": "gathering",
+            "gather_food": "gathering",
+            "hunt": "hunting",
+            "hunting": "hunting",
+            "fish": "fishing",
+            "fishing": "fishing",
+            "farm": "farming",
+            "farming": "farming",
+            "herd": "herding",
+            "herding": "herding",
+            "craft": "smithing",
+            "crafting": "smithing",
+            "build": "shelter",
+            "building": "shelter",
+            "cook": "cooking",
+            "cooking": "cooking",
+            "mine": "mining",
+            "mining": "mining",
+        }
+
+        category = activity_to_bonus.get(activity_name.lower())
+        if category is None:
+            # Проверяем, есть ли прямой бонус с таким именем
+            return self.tech_bonuses.get(activity_name.lower(), 0.0)
+
+        return self.tech_bonuses.get(category, 0.0)
+
+    def has_required_tech(self, method_id: str, known_technologies: set) -> bool:
+        """
+        Technology -> Production Link:
+        Проверяет, есть ли у NPC необходимые технологии для метода производства.
+
+        Args:
+            method_id: ID метода производства
+            known_technologies: Множество ID известных технологий
+
+        Returns:
+            True если все требуемые технологии известны
+        """
+        method = PRODUCTION_METHODS.get(method_id)
+        if not method:
+            return False
+
+        return all(
+            tech_id in known_technologies
+            for tech_id in method.required_technologies
+        )

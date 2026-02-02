@@ -1232,6 +1232,25 @@ class ClassSystem:
             key=lambda c: self.classes[c].political_power
         )
 
+    def get_class_power(self) -> Dict[str, float]:
+        """
+        Возвращает распределение политической власти по классам.
+
+        Используется для определения доминирующей идеологии.
+        По Марксу: идеи господствующего класса = господствующие идеи.
+
+        Returns:
+            Dict mapping class name (str) to power level (0-1)
+        """
+        power_distribution = {}
+
+        for class_type, social_class in self.classes.items():
+            # Используем имя класса как ключ (для совместимости с BeliefSystem)
+            class_name = class_type.name  # e.g., "LANDOWNER", "LABORER"
+            power_distribution[class_name] = social_class.political_power
+
+        return power_distribution
+
     def update_class_relations(self, year: int) -> None:
         """Обновляет отношения между классами"""
         # Антагонистические классы
