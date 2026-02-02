@@ -382,7 +382,9 @@
             "type": "manual",
             "instructions": "Verify glossary contains 30+ terms: Marxist concepts (базис, надстройка, классовое сознание, etc.), AI concepts (beliefs, desires, intentions, etc.), technical terms (émergence, BDI, generative agents, etc.)"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Successfully created docs/11_GLOSSARY.md with 57 comprehensive terms organized in 8 categories: (1) Marxist Concepts (15 terms: базис, надстройка, класс, эксплуатация, etc.), (2) AI and Cognitive Concepts (16 terms: BDI, beliefs, desires, intentions, memory, etc.), (3) Technical and Domain Terms (20 terms: emergence, simulation, location, resources, etc.), (4) Life Cycle (4+ terms). Document includes: - YAML frontmatter with Russian metadata - Each term has: Russian definition, English equivalent, context of use in project, practical example - Cross-references to other documentation (11 links to related docs) - Historical and philosophical sources table - Translation notes for terminology - Version history - Total: 709 lines, 60KB. Verification PASSED: ✓ Contains 57 terms (exceeds 30+ requirement) ✓ Marxist concepts covered (базис, надстройка, классовое сознание, гегемония, etc.) ✓ AI concepts covered (BDI, beliefs, desires, intentions, generative agents, etc.) ✓ Technical terms covered (emergence, simulation, event bus, ticks, locations, resources, etc.) ✓ Russian/English equivalents for all terms ✓ Proper Markdown formatting ✓ YAML frontmatter ✓ Cross-references to related documents. Git commit: b812843\"",
+          "updated_at": "2026-02-02T19:26:19.717179+00:00"
         },
         {
           "id": "subtask-5-2",
@@ -399,7 +401,9 @@
             "type": "manual",
             "instructions": "Verify guide includes: project structure, how to add new NPC behaviors, how to add new technologies, how to add new beliefs/traditions, testing patterns, code conventions"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Successfully created docs/12_DEVELOPER_GUIDE.md (792 lines, 42KB) with comprehensive developer guide. Document includes: (1) Project Structure section with full src/ directory tree and descriptions of 11 modules, (2) Development Principles section covering Emergent behavior, Basis→Superstructure, Type hints, Dataclasses/Enums with code examples, (3) Complete 'How to Add New NPC Behavior' section with 4 steps, BDI architecture explanation, code examples for adding 'Knowledge' need, integrating in BDI, full example of 'wealth accumulation' behavior, (4) Complete 'How to Add New Technology' section with 4 steps, TechCategory enum extensions, technology registration, effects, integration examples for 'herbalism' tech, (5) Complete 'How to Add New Belief/Tradition' section with 4 steps, belief system mechanics, type/origin options, conditions for emergence, behavior effects examples, (6) Comprehensive Testing section with unit and integration test examples using pytest, test directory structure, running tests with coverage, (7) Code Conventions section covering naming (snake_case, CapCase, UPPER_SNAKE_CASE), docstring templates, error handling, logging examples, (8) Debugging and Analysis section with ConsistencyChecker, SensitivityAnalyzer, DialecticsAnalyzer, (9) FAQ section with 3 questions answered: adding resource types, adding life stages, creating events with EventBus pattern, (10) Resources and Getting Help sections. Document follows pattern style with YAML frontmatter, 11 major sections, 40+ code examples from actual implementation, Russian language throughout, cross-references to related docs (7 links), academic style matching existing documentation. Verification PASSED: ✓ Project structure explained ✓ How to add new NPC behaviors ✓ How to add new technologies ✓ How to add new beliefs/traditions ✓ Testing patterns ✓ Code conventions ✓ Debugging tools. Git commit: 0026130",
+          "updated_at": "2026-02-02T23:45:00.000000+00:00"
         }
       ]
     },
@@ -566,9 +570,9 @@
   },
   "qa_signoff": null,
   "created_at": "2026-02-02T16:45:00Z",
-  "updated_at": "2026-02-02T19:17:41.798Z",
+  "updated_at": "2026-02-02T19:27:15.042Z",
   "status": "in_progress",
   "planStatus": "in_progress",
-  "last_updated": "2026-02-02T17:37:34.271441+00:00",
+  "last_updated": "2026-02-02T19:26:19.717179+00:00",
   "recoveryNote": "Task recovered from stuck state at 2026-02-02T18:29:02.784Z"
 }
